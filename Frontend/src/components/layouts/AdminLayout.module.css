@@ -1,0 +1,222 @@
+.wrapper {
+  display: flex;
+  min-height: 100vh;
+  background: #f0f2f5;
+}
+
+/* ===== Sidebar ===== */
+.sidebar {
+  width: 260px;
+  background: #1a237e;
+  color: #fff;
+  padding: 25px 0;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  overflow-y: auto;
+  transition: transform 0.3s;
+  z-index: 100;
+}
+
+.logoArea {
+  padding: 0 25px 25px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 20px;
+}
+
+.logoArea h2 {
+  color: #f57c00;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  margin: 0;
+}
+
+.logoArea p {
+  font-size: 11px;
+  color: #b0b0d0;
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-top: 4px;
+  margin-bottom: 0;
+}
+
+.navSection {
+  padding: 0 15px;
+  flex: 1;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 15px;
+  border-radius: 8px;
+  color: #c5cae9;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s;
+  margin-bottom: 5px;
+}
+
+.navItem:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.navItem.active {
+  background: #f57c00;
+  color: #fff;
+  font-weight: 700;
+}
+
+.navIcon {
+  font-size: 16px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.logoutBtn {
+  margin: 20px 15px 0;
+  padding: 12px;
+  background: rgba(244, 67, 54, 0.15);
+  color: #ff8a80;
+  border: 1px solid rgba(244, 67, 54, 0.3);
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.3s;
+  font-family: inherit;
+}
+
+.logoutBtn:hover {
+  background: #f44336;
+  color: #fff;
+}
+
+/* ===== Main ===== */
+.main {
+  flex: 1;
+  margin-left: 260px;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.topbar {
+  background: #fff;
+  padding: 18px 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.topbar h3 {
+  color: #1a237e;
+  font-size: 18px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.adminInfo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.adminAvatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #1a237e;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.adminName {
+  font-weight: 700;
+  font-size: 13px;
+  color: #333;
+}
+
+.adminRole {
+  font-size: 11px;
+  color: #999;
+  font-weight: 500;
+}
+
+.content {
+  flex: 1;
+  padding: 30px;
+}
+
+/* ===== Mobile ===== */
+.mobileToggle {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 22px;
+  color: #1a237e;
+  cursor: pointer;
+  padding: 5px;
+}
+
+@media (max-width: 992px) {
+  .sidebar {
+    transform: translateX(-100%);
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .main {
+    margin-left: 0;
+  }
+
+  .mobileToggle {
+    display: block;
+  }
+
+  .content {
+    padding: 20px;
+  }
+
+  .topbar {
+    padding: 15px 20px;
+  }
+
+  .topbar h3 {
+    font-size: 15px;
+  }
+}
+
+@media (max-width: 480px) {
+  .adminInfo div:last-child {
+    display: none; /* Mobile me sirf avatar dikhe */
+  }
+
+  .content {
+    padding: 15px;
+  }
+}
