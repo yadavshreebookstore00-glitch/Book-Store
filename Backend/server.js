@@ -92,7 +92,7 @@ const startServer = async () => {
 
     app.use(
       cors({
-        origin: process.env.CLIENT_URL || "http://localhost:5173",
+        origin: process.env.CLIENT_URL || "https://book-store-r57i.onrender.com",
         credentials: true,
       }),
     );
@@ -122,7 +122,7 @@ const startServer = async () => {
 
     const PORT = process.env.PORT || 5000;
     app.listen(PORT, () => {
-      console.log(`🚀 Server running on http://localhost:${PORT}`);
+      console.log(`🚀 Server running on https://book-store-r57i.onrender.com:${PORT}`);
     });
   } catch (error) {
     console.error("❌ Server start error:", error.message);
