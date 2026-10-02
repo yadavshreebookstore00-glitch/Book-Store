@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import connectDB from "./config/db.js";
-import dashboardRoutes from './routes/dashboardRoutes.js';
+import dashboardRoutes from "./routes/dashboardRoutes.js";
 
 // Routes
 import authRoutes from "./routes/authRoutes.js";
@@ -12,11 +12,12 @@ import userRoutes from "./routes/userRoutes.js";
 import otpRoutes from "./routes/otpRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 import bannerRoutes from "./routes/bannerRoutes.js";
-import cartRoutes from './routes/cartRoutes.js';
-import wishlistRoutes from './routes/wishlistRoutes.js';
-import orderRoutes from './routes/orderRoutes.js';
-import saleRoutes from './routes/saleRoutes.js';
-import upiRoutes from './routes/upiRoutes.js';
+import cartRoutes from "./routes/cartRoutes.js";
+import wishlistRoutes from "./routes/wishlistRoutes.js";
+import orderRoutes from "./routes/orderRoutes.js";
+import saleRoutes from "./routes/saleRoutes.js";
+import upiRoutes from "./routes/upiRoutes.js";
+import contactRoutes from './routes/contactRoutes.js';
 
 // Models
 import Book from "./models/Book.js";
@@ -66,7 +67,6 @@ const migrateSlugs = async () => {
         counter++;
       }
 
-      // Update directly without triggering save hook
       await Book.updateOne({ _id: book._id }, { $set: { slug } });
       updatedCount++;
       console.log(`  ✅ "${book.title}" → ${slug}`);
@@ -90,12 +90,40 @@ const startServer = async () => {
 
     const app = express();
 
+    // ===== ✅ CORS Setup (Local + Production) =====
+    const allowedOrigins = [
+      "http://localhost:5173",       // Vite dev
+      "http://localhost:3000",       // CRA dev
+      "http://localhost:5000",       // Backend self
+      "http://127.0.0.1:5173",
+      "http://127.0.0.1:3000",
+      "https://book-store-r57i.onrender.com", // Production frontend
+    ];
+
+    // Agar .env me CLIENT_URL hai toh add karo
+    if (process.env.CLIENT_URL) {
+      allowedOrigins.push(process.env.CLIENT_URL);
+    }
+
     app.use(
       cors({
-        origin: process.env.CLIENT_URL || "https://book-store-r57i.onrender.com",
+        origin: function (origin, callback) {
+          // Allow requests with no origin (mobile apps, Postman, etc.)
+          if (!origin) return callback(null, true);
+
+          if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
+          }
+
+          console.log("❌ CORS blocked origin:", origin);
+          return callback(new Error("Not allowed by CORS"));
+        },
         credentials: true,
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization"],
       }),
     );
+
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
     app.use(cookieParser());
@@ -113,16 +141,18 @@ const startServer = async () => {
     app.use("/api/cart", cartRoutes);
     app.use("/api/wishlist", wishlistRoutes);
     app.use("/api/orders", orderRoutes);
-    app.use('/api/dashboard', dashboardRoutes);
-    app.use('/api/sales', saleRoutes);
-    app.use('/api/upi', upiRoutes);
+    app.use("/api/dashboard", dashboardRoutes);
+    app.use("/api/sales", saleRoutes);
+    app.use("/api/upi", upiRoutes);
+    app.use('/api/contacts', contactRoutes);
 
     app.use(notFound);
     app.use(errorHandler);
 
     const PORT = process.env.PORT || 5000;
     app.listen(PORT, () => {
-      console.log(`🚀 Server running on https://book-store-r57i.onrender.com:${PORT}`);
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`✅ Allowed Origins:`, allowedOrigins);
     });
   } catch (error) {
     console.error("❌ Server start error:", error.message);
