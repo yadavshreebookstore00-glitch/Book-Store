@@ -29,6 +29,7 @@ import {
 } from 'recharts';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import DashboardSkeleton from '../../components/common/DashboardSkeleton';
 
 const COLORS = ['#1a237e', '#f57c00', '#2e7d32', '#c62828', '#6a1b9a', '#0277bd', '#00838f', '#ef6c00'];
 
@@ -56,8 +57,8 @@ const Dashboard = () => {
 
   if (loading) {
     return (
-      <div style={{ padding: '60px', textAlign: 'center', fontWeight: 600 }}>
-        Loading dashboard...
+      <div >
+       <DashboardSkeleton/>
       </div>
     );
   }
