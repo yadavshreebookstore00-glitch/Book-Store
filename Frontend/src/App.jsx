@@ -5,6 +5,7 @@ import { CartProvider } from './context/CartContext';
 import { WishlistProvider } from './context/WishlistContext';
 import AppRoutes from './routes/AppRoutes';
 import ScrollToTop from './components/common/ScrollToTop';
+import "./App.css"
 
 const App = () => {
   return (

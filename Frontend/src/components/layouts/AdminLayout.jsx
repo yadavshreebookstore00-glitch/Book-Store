@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   FaTachometerAlt,
@@ -8,16 +8,37 @@ import {
   FaImage,
   FaShoppingBag,
   FaUsers,
+  FaEnvelope,
   FaSignOutAlt,
   FaBars,
 } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
+import api from '../../services/api';
 import styles from './AdminLayout.module.css';
 
 const AdminLayout = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [unreadContacts, setUnreadContacts] = useState(0);
+
+  // ===== Fetch unread contacts count =====
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      try {
+        const { data } = await api.get('/contacts?status=new&limit=1');
+        setUnreadContacts(data.stats?.new || 0);
+      } catch (err) {
+        // Silent fail — badge optional hai
+      }
+    };
+
+    fetchUnreadCount();
+
+    // Refresh every 60 seconds
+    const interval = setInterval(fetchUnreadCount, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleLogout = () => {
     const confirmLogout = window.confirm('Are you sure you want to logout?');
@@ -46,12 +67,12 @@ const AdminLayout = () => {
     {
       to: '/admin/books',
       icon: <FaBook />,
-      label: 'Manage Books',
+      label: 'Add Books ',
     },
     {
       to: '/admin/banners',
       icon: <FaImage />,
-      label: 'Manage Banners',
+      label: 'Website Banners',
     },
     {
       to: '/admin/orders',
@@ -61,7 +82,13 @@ const AdminLayout = () => {
     {
       to: '/admin/users',
       icon: <FaUsers />,
-      label: 'Manage Users',
+      label: ' Registered Users',
+    },
+    {
+      to: '/admin/contacts',
+      icon: <FaEnvelope />,
+      label: 'Contact Messages',
+      badge: unreadContacts > 0 ? unreadContacts : null, // ✅ Badge
     },
   ];
 
@@ -89,7 +116,12 @@ const AdminLayout = () => {
               onClick={() => setSidebarOpen(false)}
             >
               <span className={styles.navIcon}>{item.icon}</span>
-              {item.label}
+              <span className={styles.navLabel}>{item.label}</span>
+
+              {/* ✅ Badge for unread contacts */}
+              {item.badge && (
+                <span className={styles.navBadge}>{item.badge}</span>
+              )}
             </NavLink>
           ))}
         </nav>

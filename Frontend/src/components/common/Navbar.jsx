@@ -7,6 +7,11 @@ import {
   FaBars,
   FaTimes,
   FaHeart,
+  FaHome,
+  FaStore,
+  FaThLarge,
+  FaGift,
+  FaTag,
 } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
@@ -18,6 +23,7 @@ import styles from './Navbar.module.css';
 
 const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
 
   // Search state
   const [searchTerm, setSearchTerm] = useState('');
@@ -26,21 +32,84 @@ const Navbar = () => {
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
 
+  // ✅ Animated Placeholder State
+  const [currentWordIndex, setCurrentWordIndex] = useState(0);
+  const [previousWordIndex, setPreviousWordIndex] = useState(null);
+  const [isAnimating, setIsAnimating] = useState(false);
+
   const searchRef = useRef(null);
   const inputRef = useRef(null);
+  const mobileSearchRef = useRef(null);
+  const mobileInputRef = useRef(null);
+  const animationTimerRef = useRef(null);
   const navigate = useNavigate();
 
   const { user } = useAuth();
   const { cartCount } = useCart();
   const { wishlistCount } = useWishlist();
 
-  // ✅ Debounce search term (300ms)
   const debouncedSearch = useDebounce(searchTerm, 300);
 
-  const toggleMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
+  // ✅ Dynamic Placeholder Words
+  const placeholderWords = [
+    'books',
+    'authors',
+    'categories',
+    'publishers',
+    'titles',
+    'genres',
+  ];
+
+  const ANIMATION_DURATION = 600; // ✅ Animation duration (ms)
+  const ROTATION_INTERVAL = 3000; // ✅ Word change interval
+
+  // ============================================================
+  // ✅ Smooth Placeholder Rotation
+  // ============================================================
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Step 1: Mark previous word for slide-out animation
+      setIsAnimating(true);
+      setPreviousWordIndex(currentWordIndex);
+
+      // Step 2: Change word after a brief delay
+      const changeTimer = setTimeout(() => {
+        setCurrentWordIndex(
+          (prev) => (prev + 1) % placeholderWords.length
+        );
+      }, 50);
+
+      // Step 3: Clear previous word AFTER animation completes
+      const clearTimer = setTimeout(() => {
+        setPreviousWordIndex(null);
+        setIsAnimating(false);
+      }, ANIMATION_DURATION);
+
+      // Cleanup timers
+      return () => {
+        clearTimeout(changeTimer);
+        clearTimeout(clearTimer);
+      };
+    }, ROTATION_INTERVAL);
+
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentWordIndex]);
+
+  const toggleMenu = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
+    setIsMobileSearchOpen(false);
+  };
+
   const closeMenu = () => setIsMobileMenuOpen(false);
 
-  // ===== Fetch suggestions when debounced term changes =====
+  const toggleMobileSearch = () => {
+    setIsMobileSearchOpen(!isMobileSearchOpen);
+    setIsMobileMenuOpen(false);
+    setTimeout(() => mobileInputRef.current?.focus(), 100);
+  };
+
+  // ===== Fetch suggestions =====
   useEffect(() => {
     const fetchSuggestions = async () => {
       if (!debouncedSearch || debouncedSearch.trim().length < 2) {
@@ -86,18 +155,15 @@ const Navbar = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // ===== Close suggestions =====
   const closeSuggestions = useCallback(() => {
     setShowSuggestions(false);
     setActiveIndex(-1);
   }, []);
 
-  // ===== Handle search submit =====
   const handleSearchSubmit = (e) => {
     if (e) e.preventDefault();
 
     if (activeIndex >= 0) {
-      // Suggestion select karo
       const totalCategories = suggestions.categories?.length || 0;
       if (activeIndex < totalCategories) {
         const cat = suggestions.categories[activeIndex];
@@ -112,9 +178,9 @@ const Navbar = () => {
 
     closeSuggestions();
     setSearchTerm('');
+    setIsMobileSearchOpen(false);
   };
 
-  // ===== Keyboard navigation =====
   const handleKeyDown = (e) => {
     const totalItems =
       (suggestions.categories?.length || 0) +
@@ -139,195 +205,356 @@ const Navbar = () => {
     } else if (e.key === 'Escape') {
       closeSuggestions();
       inputRef.current?.blur();
+      setIsMobileSearchOpen(false);
     }
   };
 
-  // ===== Handle input change =====
-  const handleInputChange = (e) => {
-    setSearchTerm(e.target.value);
-  };
+  const handleInputChange = (e) => setSearchTerm(e.target.value);
 
-  // ===== Handle input focus =====
   const handleInputFocus = () => {
     if (searchTerm.trim().length >= 2) {
       setShowSuggestions(true);
     }
   };
 
-  return (
-    <nav className={styles.navbar}>
-      <div className={styles.container}>
-        {/* ===== Logo ===== */}
-        <Link to="/" className={styles.logoWrapper} onClick={closeMenu}>
-          <img
-            src="/logo.png"
-            alt="Yadav Shree Book Store"
-            className={styles.logoImg}
-          />
-        </Link>
+  // ✅ Animated Placeholder Component
+  const AnimatedPlaceholder = () => {
+    // Hide if user has typed something
+    if (searchTerm) return null;
 
-        {/* ===== Desktop Search ===== */}
-        <div className={styles.searchWrapper} ref={searchRef}>
-          <form className={styles.searchBar} onSubmit={handleSearchSubmit}>
-            <input
-              ref={inputRef}
-              type="text"
-              placeholder="Search books, authors, or categories..."
-              className={styles.searchInput}
-              value={searchTerm}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
-              onFocus={handleInputFocus}
-              autoComplete="off"
-            />
-            <button type="submit" className={styles.searchBtn}>
-              <FaSearch />
-            </button>
-          </form>
+    return (
+      <div className={styles.placeholderContainer}>
+        <span className={styles.placeholderPrefix}>Search</span>
 
-          {/* ✅ Suggestions Dropdown */}
-          {showSuggestions && (
-            <SearchSuggestions
-              suggestions={suggestions}
-              loading={loadingSuggestions}
-              onSelect={closeSuggestions}
-              activeIndex={activeIndex}
-              setActiveIndex={setActiveIndex}
-              searchTerm={searchTerm}
-            />
+        <div className={styles.placeholderSlider}>
+          {/* Previous word — slides out to bottom */}
+          {previousWordIndex !== null && (
+            <span
+              key={`prev-${previousWordIndex}`}
+              className={`${styles.placeholderWord} ${styles.slideOutToBottom}`}
+            >
+              {placeholderWords[previousWordIndex]}
+            </span>
           )}
+
+          {/* Current word — slides in from top */}
+          <span
+            key={`curr-${currentWordIndex}`}
+            className={`${styles.placeholderWord} ${
+              isAnimating ? styles.slideInFromTop : styles.slideStatic
+            }`}
+          >
+            {placeholderWords[currentWordIndex]}
+          </span>
         </div>
+      </div>
+    );
+  };
 
-        {/* ===== Menu ===== */}
-        <div
-          className={`${styles.navMenu} ${
-            isMobileMenuOpen ? styles.active : ''
-          }`}
-        >
-          <ul className={styles.navLinks}>
-            <li>
-              <NavLink
-                to="/"
-                className={({ isActive }) =>
-                  isActive
-                    ? `${styles.navLink} ${styles.activeLink}`
-                    : styles.navLink
-                }
-                onClick={closeMenu}
-              >
-                Home
-              </NavLink>
-            </li>
-            <li>
-              <NavLink
-                to="/shop"
-                className={({ isActive }) =>
-                  isActive
-                    ? `${styles.navLink} ${styles.activeLink}`
-                    : styles.navLink
-                }
-                onClick={closeMenu}
-              >
-                Shop
-              </NavLink>
-            </li>
-            <li>
-              <NavLink
-                to="/categories"
-                className={({ isActive }) =>
-                  isActive
-                    ? `${styles.navLink} ${styles.activeLink}`
-                    : styles.navLink
-                }
-                onClick={closeMenu}
-              >
-                Categories
-              </NavLink>
-            </li>
-            <li>
-              <NavLink
-                to="/about"
-                className={({ isActive }) =>
-                  isActive
-                    ? `${styles.navLink} ${styles.activeLink}`
-                    : styles.navLink
-                }
-                onClick={closeMenu}
-              >
-                About Us
-              </NavLink>
-            </li>
-            <li>
-              <NavLink
-                to="/contact"
-                className={({ isActive }) =>
-                  isActive
-                    ? `${styles.navLink} ${styles.activeLink}`
-                    : styles.navLink
-                }
-                onClick={closeMenu}
-              >
-                Contact
-              </NavLink>
-            </li>
-          </ul>
+  return (
+    <>
+      <nav className={styles.navbar}>
+        <div className={styles.container}>
+          {/* ===== Logo ===== */}
+          <Link to="/" className={styles.logoWrapper} onClick={closeMenu}>
+            <img
+              src="/logo.png"
+              alt="Yadav Shree Book Store"
+              className={styles.logoImg}
+            />
+          </Link>
 
-          {/* Mobile Search - Same logic */}
-          <div className={styles.mobileSearch}>
-            <form onSubmit={handleSearchSubmit} style={{ display: 'flex', width: '100%' }}>
-              <input
-                type="text"
-                placeholder="Search books..."
-                value={searchTerm}
-                onChange={handleInputChange}
-              />
-              <button type="submit">
+          {/* ===== Desktop Search ===== */}
+          <div className={styles.searchWrapper} ref={searchRef}>
+            <form className={styles.searchBar} onSubmit={handleSearchSubmit}>
+              <FaSearch className={styles.searchIcon} />
+              <div className={styles.searchInputWrapper}>
+                <AnimatedPlaceholder />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  className={styles.searchInput}
+                  value={searchTerm}
+                  onChange={handleInputChange}
+                  onKeyDown={handleKeyDown}
+                  onFocus={handleInputFocus}
+                  autoComplete="off"
+                />
+              </div>
+              <button
+                type="submit"
+                className={styles.searchBtn}
+                aria-label="Search"
+              >
                 <FaSearch />
               </button>
             </form>
+
+            {showSuggestions && (
+              <SearchSuggestions
+                suggestions={suggestions}
+                loading={loadingSuggestions}
+                onSelect={closeSuggestions}
+                activeIndex={activeIndex}
+                setActiveIndex={setActiveIndex}
+                searchTerm={searchTerm}
+              />
+            )}
           </div>
 
-          {/* Icons */}
-          <div className={styles.iconGroup}>
-            <Link
-              to="/wishlist"
-              className={styles.iconLink}
-              onClick={closeMenu}
-              title="Wishlist"
+          {/* ===== Desktop Nav Menu ===== */}
+          <div
+            className={`${styles.navMenu} ${
+              isMobileMenuOpen ? styles.active : ''
+            }`}
+          >
+            <ul className={styles.navLinks}>
+              <li>
+                <NavLink
+                  to="/"
+                  className={({ isActive }) =>
+                    isActive
+                      ? `${styles.navLink} ${styles.activeLink}`
+                      : styles.navLink
+                  }
+                  onClick={closeMenu}
+                >
+                  Home
+                </NavLink>
+              </li>
+              <li>
+                <NavLink
+                  to="/shop"
+                  className={({ isActive }) =>
+                    isActive
+                      ? `${styles.navLink} ${styles.activeLink}`
+                      : styles.navLink
+                  }
+                  onClick={closeMenu}
+                >
+                  Shop
+                </NavLink>
+              </li>
+              <li>
+                <NavLink
+                  to="/categories"
+                  className={({ isActive }) =>
+                    isActive
+                      ? `${styles.navLink} ${styles.activeLink}`
+                      : styles.navLink
+                  }
+                  onClick={closeMenu}
+                >
+                  Categories
+                </NavLink>
+              </li>
+              <li>
+                <NavLink
+                  to="/about"
+                  className={({ isActive }) =>
+                    isActive
+                      ? `${styles.navLink} ${styles.activeLink}`
+                      : styles.navLink
+                  }
+                  onClick={closeMenu}
+                >
+                  About Us
+                </NavLink>
+              </li>
+              <li>
+                <NavLink
+                  to="/contact"
+                  className={({ isActive }) =>
+                    isActive
+                      ? `${styles.navLink} ${styles.activeLink}`
+                      : styles.navLink
+                  }
+                  onClick={closeMenu}
+                >
+                  Contact
+                </NavLink>
+              </li>
+            </ul>
+
+            {/* Icons (desktop) */}
+            <div className={styles.iconGroup}>
+              <Link
+                to="/wishlist"
+                className={styles.iconLink}
+                onClick={closeMenu}
+                title="Wishlist"
+              >
+                <span className={styles.iconCircle}>
+                  <FaHeart />
+                  {user && wishlistCount > 0 && (
+                    <span className={styles.cartBadge}>{wishlistCount}</span>
+                  )}
+                </span>
+              </Link>
+              <Link
+                to="/cart"
+                className={styles.iconLink}
+                onClick={closeMenu}
+                title="Cart"
+              >
+                <span className={styles.iconCircle}>
+                  <FaShoppingCart />
+                  {user && cartCount > 0 && (
+                    <span className={styles.cartBadge}>{cartCount}</span>
+                  )}
+                </span>
+              </Link>
+              <Link
+                to={user ? '/profile' : '/login'}
+                className={styles.iconLink}
+                onClick={closeMenu}
+                title={user ? 'Profile' : 'Login'}
+              >
+                <span className={styles.iconCircle}>
+                  <FaUser />
+                </span>
+              </Link>
+            </div>
+          </div>
+
+          {/* ===== Mobile Right Actions ===== */}
+          <div className={styles.mobileActions}>
+            <button
+              className={styles.mobileIconBtn}
+              onClick={toggleMobileSearch}
+              aria-label="Search"
             >
-              <FaHeart />
-              {user && wishlistCount > 0 && (
-                <span className={styles.cartBadge}>{wishlistCount}</span>
-              )}
-            </Link>
-            <Link
-              to="/cart"
-              className={styles.iconLink}
-              onClick={closeMenu}
-              title="Cart"
+              {isMobileSearchOpen ? <FaTimes /> : <FaSearch />}
+            </button>
+            <button
+              className={styles.mobileIconBtn}
+              onClick={toggleMenu}
+              aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
             >
-              <FaShoppingCart />
-              {user && cartCount > 0 && (
-                <span className={styles.cartBadge}>{cartCount}</span>
-              )}
-            </Link>
-            <Link
-              to={user ? '/profile' : '/login'}
-              className={styles.iconLink}
-              onClick={closeMenu}
-              title={user ? 'Profile' : 'Login'}
-            >
-              <FaUser />
-            </Link>
+              {isMobileMenuOpen ? <FaTimes /> : <FaBars />}
+            </button>
           </div>
         </div>
 
-        {/* ===== Mobile Toggle ===== */}
-        <button className={styles.menuToggle} onClick={toggleMenu}>
-          {isMobileMenuOpen ? <FaTimes /> : <FaBars />}
-        </button>
-      </div>
-    </nav>
+        {/* ===== Mobile Search Bar (Dropdown) ===== */}
+        {isMobileSearchOpen && (
+          <div className={styles.mobileSearchDropdown} ref={mobileSearchRef}>
+            <form
+              onSubmit={handleSearchSubmit}
+              className={styles.mobileSearchFormNew}
+            >
+              <FaSearch className={styles.mobileSearchIconNew} />
+              <div className={styles.searchInputWrapper}>
+                <AnimatedPlaceholder />
+                <input
+                  ref={mobileInputRef}
+                  type="text"
+                  className={styles.mobileSearchInput}
+                  value={searchTerm}
+                  onChange={handleInputChange}
+                  onKeyDown={handleKeyDown}
+                  autoComplete="off"
+                />
+              </div>
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className={styles.mobileClearBtn}
+                  aria-label="Clear"
+                >
+                  <FaTimes />
+                </button>
+              )}
+            </form>
+
+            {showSuggestions && (
+              <SearchSuggestions
+                suggestions={suggestions}
+                loading={loadingSuggestions}
+                onSelect={closeSuggestions}
+                activeIndex={activeIndex}
+                setActiveIndex={setActiveIndex}
+                searchTerm={searchTerm}
+              />
+            )}
+          </div>
+        )}
+      </nav>
+
+      {/* ===== Mobile Floating Bottom Nav ===== */}
+      <nav className={styles.bottomNav}>
+        <NavLink
+          to="/"
+          className={({ isActive }) =>
+            isActive
+              ? `${styles.bottomItem} ${styles.bottomActive}`
+              : styles.bottomItem
+          }
+        >
+          <FaHome className={styles.bottomIcon} />
+          <span>Home</span>
+        </NavLink>
+
+        <NavLink
+          to="/shop"
+          className={({ isActive }) =>
+            isActive
+              ? `${styles.bottomItem} ${styles.bottomActive}`
+              : styles.bottomItem
+          }
+        >
+          <FaStore className={styles.bottomIcon} />
+          <span>Shop</span>
+        </NavLink>
+
+        <NavLink
+          to="/categories"
+          className={({ isActive }) =>
+            isActive
+              ? `${styles.bottomItem} ${styles.bottomActive}`
+              : styles.bottomItem
+          }
+        >
+          <FaThLarge className={styles.bottomIcon} />
+          <span>Categories</span>
+        </NavLink>
+
+        <NavLink
+          to="/wishlist"
+          className={({ isActive }) =>
+            isActive
+              ? `${styles.bottomItem} ${styles.bottomActive}`
+              : styles.bottomItem
+          }
+        >
+          <span className={styles.bottomIconWrap}>
+            <FaGift className={styles.bottomIcon} />
+            {user && wishlistCount > 0 && (
+              <span className={styles.bottomBadge}>{wishlistCount}</span>
+            )}
+          </span>
+          <span>Wishlist</span>
+        </NavLink>
+
+        <NavLink
+          to="/cart"
+          className={({ isActive }) =>
+            isActive
+              ? `${styles.bottomItem} ${styles.bottomActive}`
+              : styles.bottomItem
+          }
+        >
+          <span className={styles.bottomIconWrap}>
+            <FaTag className={styles.bottomIcon} />
+            {user && cartCount > 0 && (
+              <span className={styles.bottomBadge}>{cartCount}</span>
+            )}
+          </span>
+          <span>Cart</span>
+        </NavLink>
+      </nav>
+    </>
   );
 };
 

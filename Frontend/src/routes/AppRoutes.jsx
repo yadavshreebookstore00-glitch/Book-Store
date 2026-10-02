@@ -15,6 +15,7 @@ import Loader from '../components/common/Loader';
 
 // Lazy Pages
 const Home = lazy(() => import('../pages/Home'));
+const ManageContacts = lazy(() => import('../pages/admin/ManageContacts'));
 const Shop = lazy(() => import('../pages/Shop'));
 const Categories = lazy(() => import('../pages/Categories'));
 const BookDetails = lazy(() => import('../pages/BookDetails'));
@@ -46,6 +47,7 @@ const AppRoutes = () => {
         <Route element={<AdminRoute />}>
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="contacts" element={<ManageContacts/>} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="billing" element={<Billing />} /> {/* ✅ NAYA */}
             <Route path="sales" element={<Sales />} /> {/* ✅ NAYA */}

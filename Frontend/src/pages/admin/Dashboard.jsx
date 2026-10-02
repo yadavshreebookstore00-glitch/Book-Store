@@ -5,10 +5,13 @@ import {
   FaBook,
   FaShoppingBag,
   FaRupeeSign,
-  FaArrowUp,
-  FaArrowDown,
   FaEye,
   FaExclamationTriangle,
+  FaEnvelope,
+  FaEnvelopeOpen,
+  FaReply,
+  FaClock,
+  FaArrowRight,
 } from 'react-icons/fa';
 import {
   LineChart,
@@ -22,7 +25,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
 } from 'recharts';
 import api from '../../services/api';
@@ -74,9 +76,18 @@ const Dashboard = () => {
     );
   }
 
-  const { stats, orderStatus, recentOrders, lowStockBooks, salesChartData, topBooks, categoryChartData } = data;
+  const {
+    stats,
+    orderStatus,
+    recentOrders,
+    recentContacts = [],
+    lowStockBooks,
+    salesChartData,
+    topBooks,
+    categoryChartData,
+  } = data;
 
-  // ===== Stat Cards Config =====
+  // ===== Stat Cards =====
   const statCards = [
     {
       title: 'Total Users',
@@ -110,6 +121,15 @@ const Dashboard = () => {
       bg: '#ffebee',
       link: '/admin/orders',
     },
+    {
+      title: 'Total Messages',
+      value: stats.totalContacts || 0,
+      icon: <FaEnvelope />,
+      color: '#6a1b9a',
+      bg: '#f3e5f5',
+      link: '/admin/contacts',
+      badge: stats.unreadContacts > 0 ? `${stats.unreadContacts} new` : null,
+    },
   ];
 
   // ===== Order Status Donut Data =====
@@ -124,6 +144,15 @@ const Dashboard = () => {
     Delivered: '#2e7d32',
     Cancelled: '#c62828',
   };
+
+  // ===== Format Date =====
+  const formatDate = (date) =>
+    new Date(date).toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
 
   return (
     <div>
@@ -162,7 +191,7 @@ const Dashboard = () => {
         color: '#fff',
       }}>
         <div>
-          <p style={{ fontSize: '13px', fontWeight: 600, opacity: 0.85, marginBottom: '3px' }}>
+          <p style={{ fontSize: '13px', fontWeight: 600, opacity: 0.85, marginBottom: '3px', margin: '0 0 3px 0' }}>
             TODAY'S PERFORMANCE
           </p>
           <p style={{ fontSize: '20px', fontWeight: 800, margin: 0 }}>
@@ -187,62 +216,82 @@ const Dashboard = () => {
       {/* ===== Stat Cards ===== */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-        gap: '20px',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: '18px',
         marginBottom: '25px',
       }}>
         {statCards.map((stat, i) => (
-          <Link
-            key={i}
-            to={stat.link}
-            style={{ textDecoration: 'none' }}
-          >
+          <Link key={i} to={stat.link} style={{ textDecoration: 'none' }}>
             <div
               style={{
                 background: '#fff',
-                padding: '22px',
+                padding: '20px',
                 borderRadius: '12px',
                 boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '18px',
+                gap: '16px',
                 borderLeft: `5px solid ${stat.color}`,
-                transition: 'transform 0.3s',
+                transition: 'transform 0.3s, box-shadow 0.3s',
                 cursor: 'pointer',
+                position: 'relative',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.transform = 'translateY(-4px)';
+                e.currentTarget.style.boxShadow = '0 12px 24px rgba(26,35,126,0.12)';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.05)';
               }}
             >
+              {/* Badge (if any) */}
+              {stat.badge && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: '10px',
+                    right: '10px',
+                    background: '#f57c00',
+                    color: '#fff',
+                    fontSize: '9px',
+                    fontWeight: 800,
+                    padding: '3px 8px',
+                    borderRadius: '10px',
+                    letterSpacing: '0.3px',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {stat.badge}
+                </span>
+              )}
+
               <div style={{
-                width: '55px',
-                height: '55px',
+                width: '52px',
+                height: '52px',
                 borderRadius: '12px',
                 background: stat.bg,
                 color: stat.color,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '24px',
+                fontSize: '22px',
                 flexShrink: 0,
               }}>
                 {stat.icon}
               </div>
               <div style={{ minWidth: 0 }}>
                 <p style={{
-                  fontSize: '13px',
+                  fontSize: '12.5px',
                   color: '#666',
                   fontWeight: 600,
-                  marginBottom: '4px',
                   margin: 0,
+                  marginBottom: '4px',
                 }}>
                   {stat.title}
                 </p>
                 <h2 style={{
-                  fontSize: '24px',
+                  fontSize: '22px',
                   fontWeight: 800,
                   color: stat.color,
                   margin: 0,
@@ -256,7 +305,7 @@ const Dashboard = () => {
         ))}
       </div>
 
-      {/* ===== Charts Row 1: Sales + Order Status ===== */}
+      {/* ===== Charts Row 1 ===== */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
@@ -392,7 +441,247 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* ===== Charts Row 2: Top Books + Categories ===== */}
+      {/* ============================================================
+          ✅ CONTACT MESSAGES SECTION — NEW
+          ============================================================ */}
+      <div
+        style={{
+          background: '#fff',
+          padding: '25px',
+          borderRadius: '12px',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
+          marginBottom: '25px',
+          borderTop: '4px solid #6a1b9a',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '20px',
+            flexWrap: 'wrap',
+            gap: '12px',
+          }}
+        >
+          <div>
+            <h3
+              style={{
+                color: '#6a1b9a',
+                fontWeight: 800,
+                fontSize: '17px',
+                margin: 0,
+                marginBottom: '3px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              <FaEnvelope /> Contact Messages
+              {stats.unreadContacts > 0 && (
+                <span
+                  style={{
+                    background: '#f57c00',
+                    color: '#fff',
+                    fontSize: '10px',
+                    fontWeight: 800,
+                    padding: '3px 9px',
+                    borderRadius: '10px',
+                    letterSpacing: '0.3px',
+                  }}
+                >
+                  {stats.unreadContacts} NEW
+                </span>
+              )}
+            </h3>
+            <p style={{ color: '#666', fontSize: '12px', fontWeight: 500, margin: 0 }}>
+              Recent customer inquiries
+            </p>
+          </div>
+
+          <Link
+            to="/admin/contacts"
+            style={{
+              color: '#6a1b9a',
+              fontWeight: 700,
+              fontSize: '12px',
+              textDecoration: 'none',
+              background: '#f3e5f5',
+              padding: '8px 14px',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              transition: 'all 0.25s ease',
+            }}
+          >
+            View All <FaArrowRight style={{ fontSize: '10px' }} />
+          </Link>
+        </div>
+
+        {/* Contact Stats */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: '12px',
+            marginBottom: '20px',
+          }}
+          className="contact-stats-grid"
+        >
+          <MiniStat
+            icon={<FaEnvelope />}
+            label="Total"
+            value={stats.totalContacts || 0}
+            color="#1a237e"
+            bg="#e8eaf6"
+          />
+          <MiniStat
+            icon={<FaClock />}
+            label="Unread"
+            value={stats.unreadContacts || 0}
+            color="#f57c00"
+            bg="#fff3e0"
+          />
+          <MiniStat
+            icon={<FaEnvelopeOpen />}
+            label="Read"
+            value={stats.readContacts || 0}
+            color="#1976d2"
+            bg="#e3f2fd"
+          />
+          <MiniStat
+            icon={<FaReply />}
+            label="Replied"
+            value={stats.repliedContacts || 0}
+            color="#2e7d32"
+            bg="#e8f5e9"
+          />
+        </div>
+
+        {/* Recent Contacts List */}
+        {recentContacts.length === 0 ? (
+          <div
+            style={{
+              textAlign: 'center',
+              padding: '40px 20px',
+              color: '#999',
+              fontWeight: 500,
+              fontSize: '13px',
+              background: '#f9f9f9',
+              borderRadius: '10px',
+            }}
+          >
+            📭 No messages yet
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {recentContacts.map((contact, i) => {
+              const isNew = contact.status === 'new';
+              return (
+                <Link
+                  key={contact._id}
+                  to="/admin/contacts"
+                  style={{
+                    textDecoration: 'none',
+                    color: 'inherit',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '12px 0',
+                    borderBottom:
+                      i < recentContacts.length - 1
+                        ? '1px solid #f0f0f0'
+                        : 'none',
+                  }}
+                >
+                  {/* Avatar */}
+                  <div
+                    style={{
+                      width: '38px',
+                      height: '38px',
+                      borderRadius: '10px',
+                      background: isNew
+                        ? 'linear-gradient(135deg, #f57c00 0%, #ef6c00 100%)'
+                        : 'linear-gradient(135deg, #6a1b9a 0%, #8e24aa 100%)',
+                      color: '#fff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 800,
+                      fontSize: '14px',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {contact.name?.charAt(0).toUpperCase() || '?'}
+                  </div>
+
+                  {/* Info */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p
+                      style={{
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        color: '#1a237e',
+                        margin: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      {contact.name}
+                      {isNew && (
+                        <span
+                          style={{
+                            background: '#f57c00',
+                            color: '#fff',
+                            fontSize: '8.5px',
+                            fontWeight: 800,
+                            padding: '2px 6px',
+                            borderRadius: '8px',
+                            letterSpacing: '0.3px',
+                          }}
+                        >
+                          NEW
+                        </span>
+                      )}
+                    </p>
+                    <p
+                      style={{
+                        fontSize: '11px',
+                        color: '#999',
+                        fontWeight: 500,
+                        margin: 0,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {contact.subject} • {contact.email}
+                    </p>
+                  </div>
+
+                  {/* Time */}
+                  <div
+                    style={{
+                      fontSize: '10.5px',
+                      color: '#999',
+                      fontWeight: 600,
+                      flexShrink: 0,
+                      textAlign: 'right',
+                    }}
+                  >
+                    {formatDate(contact.createdAt)}
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ===== Charts Row 2 ===== */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
@@ -826,6 +1115,9 @@ const Dashboard = () => {
                     fontWeight: 700,
                     textDecoration: 'none',
                     flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
                   }}
                 >
                   <FaEye /> Fix
@@ -835,8 +1127,75 @@ const Dashboard = () => {
           )}
         </div>
       </div>
+
+      {/* Responsive Style */}
+      <style>{`
+        @media (max-width: 768px) {
+          .contact-stats-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+          }
+        }
+      `}</style>
     </div>
   );
 };
+
+// ===== Mini Stat Card =====
+const MiniStat = ({ icon, label, value, color, bg }) => (
+  <div
+    style={{
+      background: bg,
+      padding: '14px 12px',
+      borderRadius: '10px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+      border: `1px solid ${color}25`,
+    }}
+  >
+    <div
+      style={{
+        width: '36px',
+        height: '36px',
+        borderRadius: '9px',
+        background: '#fff',
+        color: color,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '15px',
+        flexShrink: 0,
+        boxShadow: `0 2px 6px ${color}20`,
+      }}
+    >
+      {icon}
+    </div>
+    <div style={{ minWidth: 0 }}>
+      <p
+        style={{
+          fontSize: '10px',
+          color: '#666',
+          fontWeight: 700,
+          margin: 0,
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px',
+        }}
+      >
+        {label}
+      </p>
+      <h3
+        style={{
+          fontSize: '18px',
+          color: color,
+          fontWeight: 800,
+          margin: 0,
+          lineHeight: 1.1,
+        }}
+      >
+        {value}
+      </h3>
+    </div>
+  </div>
+);
 
 export default Dashboard;

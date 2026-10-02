@@ -1,89 +1,464 @@
+/* ==========================================================
+   Footer — Black Premium Theme
+   Palette: Pure Black · Amber #f57c00 · White accents
+   ========================================================== */
+
 .footer {
-  background: #1a237e;
+  position: relative;
+  background: #0a0a0a;
   color: #fff;
-  padding: 50px 0 20px;
-  margin-top: 50px;
+  overflow: hidden;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+/* ===== Decorative Glows (Amber blur) ===== */
+.glowOne {
+  position: absolute;
+  top: -80px;
+  left: -80px;
+  width: 320px;
+  height: 320px;
+  background: radial-gradient(
+    circle,
+    rgba(245, 124, 0, 0.15) 0%,
+    transparent 70%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+.glowTwo {
+  position: absolute;
+  bottom: -100px;
+  right: -100px;
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(
+    circle,
+    rgba(26, 35, 126, 0.25) 0%,
+    transparent 70%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ===== Container ===== */
 .container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 20px;
+  padding: 65px 24px 45px;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 30px;
+  grid-template-columns: 1.5fr 1fr 1fr 1.5fr;
+  gap: 45px;
+  position: relative;
+  z-index: 1;
 }
 
-.column h3 {
-  font-size: 16px;
+/* ===== Column Base ===== */
+.column {
+  min-width: 0;
+}
+
+.columnTitle {
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 24px;
+  position: relative;
+  padding-bottom: 12px;
+}
+
+.columnTitle::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 36px;
+  height: 2px;
+  background: linear-gradient(90deg, #f57c00 0%, #ffb74d 100%);
+  border-radius: 2px;
+}
+
+/* ===== Brand Section ===== */
+.brandLink {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  margin-bottom: 18px;
+}
+
+.brandLogo {
+  height: 62px;
+  width: auto;
+  border-radius: 10px;
+  background: rgb(255, 255, 255);
+  padding: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.brandText {
+  display: flex;
+  flex-direction: column;
+}
+
+.brandName {
+  font-size: 19px;
+  font-weight: 800;
+  color: #fff;
+  margin: 0;
+  line-height: 1.1;
+  letter-spacing: -0.3px;
+}
+
+.brandSub {
+  font-size: 10px;
+  font-weight: 700;
+  color: #f57c00;
+  letter-spacing: 2.5px;
+  margin-top: 3px;
+}
+
+.brandDesc {
+  font-size: 13.5px;
+  color: #a0a0a0;
+  font-weight: 400;
+  line-height: 1.7;
   margin-bottom: 20px;
+  max-width: 340px;
+}
+
+/* ===== Trust Badge ===== */
+.trustBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(245, 124, 0, 0.1);
+  border: 1px solid rgba(245, 124, 0, 0.25);
+  color: #f57c00;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 22px;
+  letter-spacing: 0.3px;
+}
+
+.trustIcon {
+  font-size: 13px;
+}
+
+/* ===== Social Icons ===== */
+.socialGroup {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.socialIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+
+.socialIcon:hover {
+  background: #f57c00;
+  border-color: #f57c00;
+  color: #fff;
+  transform: translateY(-4px);
+  box-shadow: 0 8px 22px rgba(245, 124, 0, 0.45);
+}
+
+/* ===== Link Lists ===== */
+.linkList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.footerLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #a0a0a0;
+  text-decoration: none;
+  transition: all 0.25s ease;
+  position: relative;
+}
+
+.footerLink:hover {
+  color: #fff;
+  transform: translateX(5px);
+}
+
+.linkIcon {
+  font-size: 9px;
+  color: #f57c00;
+  opacity: 0;
+  transform: translateX(-6px);
+  transition: all 0.25s ease;
+}
+
+.footerLink:hover .linkIcon {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* ===== Contact Rows ===== */
+.contactList {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.contactRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.contactIconWrap {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 12px;
+  background: linear-gradient(
+    135deg,
+    rgba(245, 124, 0, 0.15) 0%,
+    rgba(245, 124, 0, 0.05) 100%
+  );
+  border: 1px solid rgba(245, 124, 0, 0.25);
+  color: #f57c00;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  transition: all 0.3s ease;
+}
+
+.contactRow:hover .contactIconWrap {
+  background: #f57c00;
+  color: #fff;
+  border-color: #f57c00;
+  transform: scale(1.05);
+}
+
+.contactContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.contactLabel {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+
+.contactValue {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #e0e0e0;
+  text-decoration: none;
+  transition: color 0.2s ease;
+  line-height: 1.6;
+  word-wrap: break-word;
+}
+
+a.contactValue:hover {
   color: #f57c00;
 }
 
-.column p,
-.column a {
-  font-size: 14px;
-  color: #d0d0d0;
-  text-decoration: none;
-  display: block;
-  margin-bottom: 10px;
-  transition: color 0.3s;
+/* ===== Bottom Bar ===== */
+.bottomBar {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: #050505;
+  position: relative;
+  z-index: 1;
 }
 
-.column a:hover {
-  color: #fff;
+.bottomContainer {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 22px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  flex-wrap: wrap;
 }
 
-.bottom {
-  text-align: center;
-  padding-top: 30px;
-  margin-top: 30px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+.copyright {
   font-size: 13px;
-  color: #b0b0b0;
+  color: #737373;
+  font-weight: 500;
+  margin: 0;
+  letter-spacing: 0.2px;
+}
+
+.copyright strong {
+  color: #b8b8b8;
+  font-weight: 700;
+}
+
+.madeWith {
+  font-size: 13px;
+  color: #737373;
+  font-weight: 500;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.heartIcon {
+  color: #f57c00;
+  font-size: 11px;
+  animation: heartbeat 1.5s ease-in-out infinite;
+}
+
+@keyframes heartbeat {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.25);
+  }
+}
+
+/* ==========================================================
+   Responsive
+   ========================================================== */
+
+@media (max-width: 1024px) {
+  .container {
+    grid-template-columns: 1.4fr 1fr 1fr;
+    gap: 35px;
+  }
+
+  .column:nth-child(4) {
+    grid-column: 1 / -1;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding-top: 35px;
+  }
+
+  .contactList {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 24px;
+  }
+
+  .contactRow {
+    flex: 1 1 260px;
+  }
 }
 
 @media (max-width: 768px) {
+  .footer {
+    margin-top: 40px;
+  }
+
   .container {
     grid-template-columns: 1fr 1fr;
-    gap: 20px;
+    gap: 32px;
+    padding: 45px 20px 30px;
+  }
+
+  .column:nth-child(4) {
+    grid-column: 1 / -1;
+    padding-top: 28px;
+  }
+
+  .brandDesc {
+    max-width: 100%;
+  }
+
+  .bottomContainer {
+    flex-direction: column;
+    text-align: center;
+    padding: 20px;
+  }
+
+  .copyright,
+  .madeWith {
+    font-size: 12px;
+  }
+
+  /* Extra space for mobile bottom nav */
+  .footer {
+    padding-bottom: 80px;
+  }
+
+  .glowOne,
+  .glowTwo {
+    opacity: 0.5;
   }
 }
 
 @media (max-width: 480px) {
   .container {
     grid-template-columns: 1fr;
+    gap: 30px;
+    padding: 40px 18px 25px;
   }
-}
 
-.column h3 {
-  font-size: 16px;
-  font-weight: 800; /* Extra Bold */
-  margin-bottom: 20px;
-  color: #f57c00;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-}
+  .columnTitle {
+    font-size: 12px;
+    margin-bottom: 18px;
+  }
 
-.column p,
-.column a {
-  font-size: 14px;
-  font-weight: 500; /* Medium */
-  color: #d0d0d0;
-  text-decoration: none;
-  display: block;
-  margin-bottom: 10px;
-  transition: color 0.3s;
-  letter-spacing: 0.2px;
-}
+  .footerLink {
+    font-size: 13px;
+  }
 
-.bottom {
-  text-align: center;
-  padding-top: 30px;
-  margin-top: 30px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  font-size: 13px;
-  font-weight: 500;
-  color: #b0b0b0;
-  letter-spacing: 0.3px;
+  .contactValue {
+    font-size: 13px;
+  }
+
+  .contactIconWrap {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    font-size: 14px;
+  }
+
+  .socialIcon {
+    width: 38px;
+    height: 38px;
+    font-size: 14px;
+  }
+
+  .brandLogo {
+    height: 44px;
+  }
+
+  .brandName {
+    font-size: 17px;
+  }
+
+  .trustBadge {
+    font-size: 11px;
+    padding: 6px 12px;
+  }
 }
