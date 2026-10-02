@@ -39,12 +39,14 @@ const BookDetails = () => {
   const [toast, setToast] = useState('');
   const [toastType, setToastType] = useState('success');
   const [addingToCart, setAddingToCart] = useState(false);
+  const [showFullDesc, setShowFullDesc] = useState(false);
 
   // Fetch book
   useEffect(() => {
     const fetchBook = async () => {
       try {
         setLoading(true);
+        setError('');
         const { data } = await api.get(`/books/${id}`);
         setBook(data.book);
         setRelated(data.related || []);
@@ -57,10 +59,11 @@ const BookDetails = () => {
     fetchBook();
   }, [id]);
 
-  // Scroll to top on book change
+  // Reset on book change
   useEffect(() => {
     window.scrollTo(0, 0);
     setQuantity(1);
+    setShowFullDesc(false);
   }, [id]);
 
   // Toast auto-hide
@@ -69,6 +72,11 @@ const BookDetails = () => {
     const t = setTimeout(() => setToast(''), 2500);
     return () => clearTimeout(t);
   }, [toast]);
+
+  const showToast = (msg, type = 'success') => {
+    setToast(msg);
+    setToastType(type);
+  };
 
   // ===== Add to Cart =====
   const handleAddToCart = async () => {
@@ -94,17 +102,12 @@ const BookDetails = () => {
     }
     const result = await toggleWishlist(book._id);
     if (result.success) {
-      showToast(
-        result.action === 'added'
-          ? 'Added to wishlist!'
-          : 'Removed from wishlist',
-        'success'
-      );
+      showToast(result.action === 'added' ? 'Added to wishlist!' : 'Removed from wishlist', 'success');
     }
   };
 
   // ===== Buy Now =====
-  const handleBuyNow = async () => {
+  const handleBuyNow = () => {
     if (!user) {
       navigate('/login');
       return;
@@ -123,27 +126,15 @@ const BookDetails = () => {
     });
   };
 
-  // ===== Show Toast =====
-  const showToast = (msg, type = 'success') => {
-    setToast(msg);
-    setToastType(type);
-  };
-
   // ===== Render Stars =====
   const renderStars = (rating) => {
     const stars = [];
     const fullStars = Math.floor(rating || 0);
     const hasHalf = (rating || 0) - fullStars >= 0.5;
 
-    for (let i = 0; i < fullStars; i++) {
-      stars.push(<FaStar key={`full-${i}`} />);
-    }
-    if (hasHalf) {
-      stars.push(<FaStarHalfAlt key="half" />);
-    }
-    while (stars.length < 5) {
-      stars.push(<FaRegStar key={`empty-${stars.length}`} />);
-    }
+    for (let i = 0; i < fullStars; i++) stars.push(<FaStar key={`full-${i}`} />);
+    if (hasHalf) stars.push(<FaStarHalfAlt key="half" />);
+    while (stars.length < 5) stars.push(<FaRegStar key={`empty-${stars.length}`} />);
     return stars;
   };
 
@@ -151,1129 +142,361 @@ const BookDetails = () => {
 
   if (error || !book) {
     return (
-      <div className="not-found">
+      <div className="bd-notfound">
+        <style>{css}</style>
         <h1>404</h1>
         <h2>Book Not Found</h2>
         <p>{error || 'The book you are looking for does not exist.'}</p>
-        <Link to="/shop" className="back-btn">
-          Back to Shop
-        </Link>
+        <Link to="/shop" className="bd-back">Back to Shop</Link>
       </div>
     );
   }
 
   const inWishlist = isInWishlist(book._id);
-  const discountPercent =
-    book.originalPrice > book.price
-      ? Math.round(
-          ((book.originalPrice - book.price) / book.originalPrice) * 100
-        )
-      : 0;
+  const hasDiscount = book.originalPrice > book.price;
+  const discountPercent = hasDiscount
+    ? Math.round(((book.originalPrice - book.price) / book.originalPrice) * 100)
+    : 0;
+  const inStock = book.stock > 0;
+  const longDesc = (book.description || '').length > 180;
 
   return (
-    <div className="book-details-page">
+    <div className="bd-page">
+      <style>{css}</style>
+
       {/* ===== Toast ===== */}
       {toast && (
-        <div className={`toast toast-${toastType}`}>
-          {toastType === 'success' ? (
-            <FaCheckCircle />
-          ) : (
-            <FaExclamationTriangle />
-          )}
+        <div className={`bd-toast bd-toast-${toastType}`}>
+          {toastType === 'success' ? <FaCheckCircle /> : <FaExclamationTriangle />}
           <span>{toast}</span>
         </div>
       )}
 
       {/* ===== Breadcrumb ===== */}
-      <div className="breadcrumb">
+      <nav className="bd-crumb">
         <Link to="/">Home</Link>
-        <FaChevronRight className="breadcrumb-sep" />
+        <FaChevronRight className="bd-crumb-sep" />
         <Link to="/shop">Shop</Link>
-        <FaChevronRight className="breadcrumb-sep" />
-        <span className="breadcrumb-current">{book.title}</span>
-      </div>
+        <FaChevronRight className="bd-crumb-sep" />
+        <span className="bd-crumb-current">{book.title}</span>
+      </nav>
 
-      {/* ===== Main Layout ===== */}
-      <div className="details-layout">
-        {/* ===== LEFT: Image ===== */}
-        <div className="image-section">
-          <div className="image-wrapper">
-            <img
-              src={book.image}
-              alt={book.title}
-              onError={(e) => {
-                e.target.src =
-                  'https://via.placeholder.com/400x550?text=Book';
-              }}
-            />
-
-            {/* Discount Badge */}
-            {discountPercent > 0 && (
-              <span className="discount-badge">
-                {discountPercent}% OFF
-              </span>
-            )}
-          </div>
-
-          {/* Trust Badges */}
-          <div className="trust-badges">
-            <div className="trust-item">
-              <FaTruck />
-              <span>Free Delivery</span>
-            </div>
-            <div className="trust-item">
-              <FaUndo />
-              <span>7-Day Returns</span>
-            </div>
-            <div className="trust-item">
-              <FaShieldAlt />
-              <span>Secure Pay</span>
-            </div>
-          </div>
+      {/* ===== Main Card ===== */}
+      <div className="bd-card">
+        {/* Image */}
+        <div className="bd-image">
+          <img
+            src={book.image}
+            alt={book.title}
+            onError={(e) => {
+              e.target.src = 'https://via.placeholder.com/400x550?text=Book';
+            }}
+          />
         </div>
 
-        {/* ===== RIGHT: Info ===== */}
-        <div className="info-section">
-          {/* Category */}
-          <span className="category-tag">{book.category}</span>
-
-          {/* Title */}
-          <h1 className="book-title">{book.title}</h1>
-
-          {/* Author */}
-          <p className="book-author">
-            by <strong>{book.author}</strong>
-          </p>
-
-          {/* Rating */}
-          <div className="rating-row">
-            <div className="stars">{renderStars(book.rating)}</div>
-            <span className="rating-value">{book.rating?.toFixed(1)}</span>
-            <span className="rating-count">
-              ({book.numReviews || 0} reviews)
-            </span>
-          </div>
-
-          {/* Description */}
-          <p className="book-description">{book.description}</p>
-
-          {/* Price Box */}
-          <div className="price-box">
-            <div className="price-main">
-              <span className="price-current">₹{book.price}</span>
-              {book.originalPrice > book.price && (
-                <span className="price-original">
-                  ₹{book.originalPrice}
-                </span>
-              )}
+        <div className="bd-info">
+          {/* Head: category, title, author, rating, price */}
+          <div className="bd-head">
+            <div className="bd-head-top">
+              <span className="bd-cat">{book.category}</span>
+              <button
+                className={`bd-wish ${inWishlist ? 'active' : ''}`}
+                onClick={handleWishlist}
+                aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+              >
+                {inWishlist ? <FaHeart /> : <FaRegHeart />}
+              </button>
             </div>
-            {discountPercent > 0 && (
-              <span className="save-badge">
-                Save ₹{book.originalPrice - book.price}
+
+            <h1 className="bd-title">{book.title}</h1>
+            <p className="bd-author">by <strong>{book.author}</strong></p>
+
+            <div className="bd-rating">
+              <span className="bd-stars">{renderStars(book.rating)}</span>
+              <span className="bd-rating-val">{book.rating?.toFixed(1) || '0.0'}</span>
+              <span className="bd-rating-count">({book.numReviews || 0})</span>
+            </div>
+
+            <div className="bd-price">
+              <span className="bd-price-now">₹{book.price}</span>
+              {hasDiscount && <span className="bd-price-old">₹{book.originalPrice}</span>}
+              {hasDiscount && <span className="bd-price-off">{discountPercent}% off</span>}
+            </div>
+          </div>
+
+          {/* Rest */}
+          <div className="bd-rest">
+            {/* Stock + meta chips */}
+            <div className="bd-chips">
+              <span className={`bd-stock ${book.stock > 10 ? 'in' : inStock ? 'low' : 'out'}`}>
+                {book.stock > 10
+                  ? 'In stock'
+                  : inStock
+                    ? `Only ${book.stock} left`
+                    : 'Out of stock'}
               </span>
-            )}
-          </div>
+              {book.language && <span className="bd-chip"><b>Language</b> {book.language}</span>}
+              {book.pages > 0 && <span className="bd-chip"><b>Pages</b> {book.pages}</span>}
+              {book.publisher && <span className="bd-chip"><b>Publisher</b> {book.publisher}</span>}
+            </div>
 
-          {/* Stock Status */}
-          <div
-            className={`stock-status ${
-              book.stock > 10
-                ? 'in-stock'
-                : book.stock > 0
-                ? 'low-stock'
-                : 'out-stock'
-            }`}
-          >
-            {book.stock > 10
-              ? `✓ In Stock (${book.stock} available)`
-              : book.stock > 0
-              ? `⚠ Only ${book.stock} left in stock`
-              : '✕ Out of Stock'}
-          </div>
-
-          {/* Quantity + Actions */}
-          {book.stock > 0 && (
-            <>
-              {/* Quantity */}
-              <div className="quantity-row">
-                <span className="qty-label">Quantity:</span>
-                <div className="qty-selector">
-                  <button
-                    onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                    aria-label="Decrease quantity"
-                  >
-                    <FaMinus />
+            {/* Description */}
+            {book.description && (
+              <div className="bd-desc-wrap">
+                <p className={`bd-desc ${showFullDesc ? '' : 'clamped'}`}>{book.description}</p>
+                {longDesc && (
+                  <button className="bd-more" onClick={() => setShowFullDesc((v) => !v)}>
+                    {showFullDesc ? 'Show less' : 'Read more'}
                   </button>
-                  <span className="qty-value">{quantity}</span>
-                  <button
-                    onClick={() =>
-                      setQuantity((q) => Math.min(book.stock, q + 1))
-                    }
-                    aria-label="Increase quantity"
-                  >
-                    <FaPlus />
+                )}
+              </div>
+            )}
+
+            {/* Quantity + Actions */}
+            {inStock && (
+              <>
+                <div className="bd-qty-row">
+                  <span className="bd-qty-label">Quantity</span>
+                  <div className="bd-qty">
+                    <button onClick={() => setQuantity((q) => Math.max(1, q - 1))} aria-label="Decrease quantity">
+                      <FaMinus />
+                    </button>
+                    <span>{quantity}</span>
+                    <button onClick={() => setQuantity((q) => Math.min(book.stock, q + 1))} aria-label="Increase quantity">
+                      <FaPlus />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Mobile par ye bottom bar ban jaata hai */}
+                <div className="bd-actions">
+                  <div className="bd-bar-total">
+                    <small>Total</small>
+                    <strong>₹{book.price * quantity}</strong>
+                  </div>
+                  <button className="bd-btn bd-btn-primary" onClick={handleAddToCart} disabled={addingToCart}>
+                    <FaShoppingCart />
+                    {addingToCart ? 'Adding...' : 'Add to Cart'}
+                  </button>
+                  <button className="bd-btn bd-btn-accent" onClick={handleBuyNow}>
+                    <FaBolt />
+                    Buy Now
                   </button>
                 </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="action-buttons">
-                <button
-                  className="btn btn-primary"
-                  onClick={handleAddToCart}
-                  disabled={addingToCart}
-                >
-                  <FaShoppingCart />
-                  {addingToCart ? 'Adding...' : 'Add to Cart'}
-                </button>
-
-                <button className="btn btn-accent" onClick={handleBuyNow}>
-                  <FaBolt />
-                  Buy Now
-                </button>
-
-                <button
-                  className={`btn btn-wishlist ${
-                    inWishlist ? 'active' : ''
-                  }`}
-                  onClick={handleWishlist}
-                  aria-label={
-                    inWishlist ? 'Remove from wishlist' : 'Add to wishlist'
-                  }
-                >
-                  {inWishlist ? <FaHeart /> : <FaRegHeart />}
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* Book Details Grid */}
-          <div className="book-meta">
-            {book.language && (
-              <div className="meta-item">
-                <span className="meta-label">Language</span>
-                <span className="meta-value">{book.language}</span>
-              </div>
+              </>
             )}
-            {book.pages > 0 && (
-              <div className="meta-item">
-                <span className="meta-label">Pages</span>
-                <span className="meta-value">{book.pages}</span>
-              </div>
-            )}
-            {book.publisher && (
-              <div className="meta-item">
-                <span className="meta-label">Publisher</span>
-                <span className="meta-value">{book.publisher}</span>
-              </div>
-            )}
-            {book.stock > 0 && (
-              <div className="meta-item">
-                <span className="meta-label">Availability</span>
-                <span className="meta-value meta-success">In Stock</span>
-              </div>
-            )}
+
+            {/* Trust */}
+            <div className="bd-trust">
+              <span><FaTruck /> Free delivery</span>
+              <span><FaUndo /> 7-day returns</span>
+              <span><FaShieldAlt /> Secure pay</span>
+            </div>
           </div>
         </div>
       </div>
 
       {/* ===== Related Books ===== */}
       {related.length > 0 && (
-        <div className="related-section">
-          <div className="related-header">
-            <h2 className="related-title">
-              You May Also <span className="related-title-gradient">Like</span>
-            </h2>
-            <Link to="/shop" className="related-view-all">
-              View All →
-            </Link>
+        <section className="bd-related">
+          <div className="bd-related-head">
+            <h2>You may also like</h2>
+            <Link to="/shop">View all</Link>
           </div>
 
-          <div className="related-grid">
+          <div className="bd-related-grid">
             {related.map((b) => (
-              <Link
-                key={b._id}
-                to={`/book/${b.slug || b._id}`}
-                className="related-card"
-              >
-                <div className="related-image-wrap">
+              <Link key={b._id} to={`/book/${b.slug || b._id}`} className="bd-rcard">
+                <div className="bd-rimg">
                   <img
                     src={b.image}
                     alt={b.title}
+                    loading="lazy"
                     onError={(e) => {
-                      e.target.src =
-                        'https://via.placeholder.com/200x260?text=Book';
+                      e.target.src = 'https://via.placeholder.com/200x260?text=Book';
                     }}
                   />
                 </div>
-                <div className="related-info">
-                  <h3 className="related-book-title">{b.title}</h3>
-                  <p className="related-author">{b.author}</p>
-                  <div className="related-bottom">
-                    <span className="related-price">₹{b.price}</span>
-                    <span className="related-rating">
-                      <FaStar /> {b.rating?.toFixed(1) || '0.0'}
-                    </span>
+                <div className="bd-rinfo">
+                  <h3>{b.title}</h3>
+                  <p>{b.author}</p>
+                  <div className="bd-rbottom">
+                    <span className="bd-rprice">₹{b.price}</span>
+                    <span className="bd-rrating"><FaStar /> {b.rating?.toFixed(1) || '0.0'}</span>
                   </div>
                 </div>
               </Link>
             ))}
           </div>
-        </div>
+        </section>
       )}
-
-      {/* ==========================================================
-          CSS
-          ========================================================== */}
-      <style>{`
-        /* ================= PAGE ================= */
-        .book-details-page {
-          padding: 20px 20px 60px;
-          max-width: 1200px;
-          margin: 0 auto;
-          width: 100%;
-          box-sizing: border-box;
-        }
-
-        /* ================= NOT FOUND ================= */
-        .not-found {
-          padding: 80px 20px;
-          text-align: center;
-          max-width: 500px;
-          margin: 0 auto;
-        }
-
-        .not-found h1 {
-          font-size: 80px;
-          color: #1a237e;
-          margin: 0;
-          font-weight: 800;
-          letter-spacing: -2px;
-        }
-
-        .not-found h2 {
-          color: #333;
-          margin-bottom: 12px;
-          font-weight: 700;
-          font-size: 22px;
-        }
-
-        .not-found p {
-          color: #666;
-          margin-bottom: 28px;
-          font-weight: 500;
-          font-size: 14px;
-        }
-
-        .back-btn {
-          background: #1a237e;
-          color: #fff;
-          padding: 12px 30px;
-          border-radius: 10px;
-          text-decoration: none;
-          font-weight: 700;
-          display: inline-block;
-          transition: all 0.3s;
-        }
-
-        .back-btn:hover {
-          background: #f57c00;
-          transform: translateY(-2px);
-          box-shadow: 0 8px 20px rgba(245, 124, 0, 0.3);
-        }
-
-        /* ================= TOAST ================= */
-        .toast {
-          position: fixed;
-          top: 80px;
-          right: 20px;
-          padding: 14px 22px;
-          border-radius: 12px;
-          font-weight: 700;
-          font-size: 14px;
-          z-index: 1000;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          animation: toastIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-          box-shadow: 0 12px 28px rgba(0, 0, 0, 0.15);
-          color: #fff;
-        }
-
-        .toast-success {
-          background: linear-gradient(135deg, #2e7d32 0%, #43a047 100%);
-        }
-
-        .toast-error {
-          background: linear-gradient(135deg, #c62828 0%, #e53935 100%);
-        }
-
-        @keyframes toastIn {
-          from {
-            transform: translateX(120%);
-            opacity: 0;
-          }
-          to {
-            transform: translateX(0);
-            opacity: 1;
-          }
-        }
-
-        /* ================= BREADCRUMB ================= */
-        .breadcrumb {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          margin-bottom: 24px;
-          font-size: 12.5px;
-          font-weight: 600;
-          color: #999;
-          flex-wrap: wrap;
-        }
-
-        .breadcrumb a {
-          color: #666;
-          text-decoration: none;
-          transition: color 0.2s;
-        }
-
-        .breadcrumb a:hover {
-          color: #1a237e;
-        }
-
-        .breadcrumb-sep {
-          font-size: 9px;
-          color: #ccc;
-        }
-
-        .breadcrumb-current {
-          color: #1a237e;
-          font-weight: 700;
-          max-width: 250px;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-
-        /* ================= MAIN LAYOUT ================= */
-        .details-layout {
-          display: grid;
-          grid-template-columns: 380px 1fr;
-          gap: 40px;
-          background: #fff;
-          padding: 35px;
-          border-radius: 20px;
-          box-shadow: 0 8px 32px rgba(26, 35, 126, 0.08);
-          border: 1px solid #f0f0f0;
-        }
-
-        /* ================= IMAGE SECTION ================= */
-        .image-section {
-          display: flex;
-          flex-direction: column;
-          gap: 18px;
-        }
-
-        .image-wrapper {
-          position: relative;
-          background: #f9f9f9;
-          border-radius: 16px;
-          padding: 20px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          min-height: 480px;
-          overflow: hidden;
-        }
-
-        .image-wrapper img {
-          width: 100%;
-          max-width: 320px;
-          height: auto;
-          border-radius: 12px;
-          box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
-          transition: transform 0.4s ease;
-        }
-
-        .image-wrapper:hover img {
-          transform: scale(1.03);
-        }
-
-        .discount-badge {
-          position: absolute;
-          top: 16px;
-          left: 16px;
-          background: linear-gradient(135deg, #f57c00 0%, #ef6c00 100%);
-          color: #fff;
-          padding: 6px 14px;
-          border-radius: 8px;
-          font-size: 12px;
-          font-weight: 800;
-          letter-spacing: 0.5px;
-          box-shadow: 0 6px 16px rgba(245, 124, 0, 0.4);
-        }
-
-        /* Trust Badges */
-        .trust-badges {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 8px;
-        }
-
-        .trust-item {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 6px;
-          padding: 12px 6px;
-          background: #f9f9f9;
-          border-radius: 10px;
-          font-size: 10.5px;
-          font-weight: 700;
-          color: #555;
-          text-align: center;
-          border: 1px solid #f0f0f0;
-        }
-
-        .trust-item svg {
-          color: #f57c00;
-          font-size: 16px;
-        }
-
-        /* ================= INFO SECTION ================= */
-        .info-section {
-          display: flex;
-          flex-direction: column;
-          gap: 14px;
-        }
-
-        .category-tag {
-          display: inline-block;
-          align-self: flex-start;
-          background: #e8eaf6;
-          color: #1a237e;
-          padding: 5px 14px;
-          border-radius: 20px;
-          font-size: 11px;
-          font-weight: 800;
-          letter-spacing: 0.8px;
-          text-transform: uppercase;
-        }
-
-        .book-title {
-          color: #1a237e;
-          font-weight: 800;
-          font-size: 28px;
-          line-height: 1.25;
-          margin: 0;
-          letter-spacing: -0.5px;
-        }
-
-        .book-author {
-          color: #666;
-          font-weight: 500;
-          font-size: 14px;
-          margin: 0;
-        }
-
-        .book-author strong {
-          color: #1a237e;
-          font-weight: 700;
-        }
-
-        /* Rating Row */
-        .rating-row {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          flex-wrap: wrap;
-        }
-
-        .stars {
-          display: inline-flex;
-          gap: 3px;
-          color: #f57c00;
-          font-size: 15px;
-        }
-
-        .rating-value {
-          font-weight: 800;
-          color: #1a237e;
-          font-size: 14px;
-        }
-
-        .rating-count {
-          color: #999;
-          font-size: 12.5px;
-          font-weight: 600;
-        }
-
-        /* Description */
-        .book-description {
-          color: #555;
-          font-weight: 500;
-          line-height: 1.75;
-          font-size: 14px;
-          margin: 0;
-          padding: 16px 0;
-          border-top: 1px solid #f0f0f0;
-          border-bottom: 1px solid #f0f0f0;
-        }
-
-        /* Price Box */
-        .price-box {
-          display: flex;
-          align-items: center;
-          gap: 15px;
-          flex-wrap: wrap;
-        }
-
-        .price-main {
-          display: flex;
-          align-items: baseline;
-          gap: 12px;
-          flex-wrap: wrap;
-        }
-
-        .price-current {
-          font-size: 32px;
-          font-weight: 800;
-          color: #f57c00;
-          letter-spacing: -1px;
-          line-height: 1;
-        }
-
-        .price-original {
-          font-size: 16px;
-          color: #999;
-          text-decoration: line-through;
-          font-weight: 500;
-        }
-
-        .save-badge {
-          background: #e8f5e9;
-          color: #2e7d32;
-          padding: 5px 12px;
-          border-radius: 20px;
-          font-size: 12px;
-          font-weight: 800;
-          letter-spacing: 0.3px;
-        }
-
-        /* Stock Status */
-        .stock-status {
-          font-size: 13px;
-          font-weight: 700;
-          padding: 10px 16px;
-          border-radius: 10px;
-          display: inline-block;
-          align-self: flex-start;
-        }
-
-        .stock-status.in-stock {
-          background: #e8f5e9;
-          color: #2e7d32;
-        }
-
-        .stock-status.low-stock {
-          background: #fff3e0;
-          color: #f57c00;
-        }
-
-        .stock-status.out-stock {
-          background: #ffebee;
-          color: #c62828;
-        }
-
-        /* Quantity Row */
-        .quantity-row {
-          display: flex;
-          align-items: center;
-          gap: 15px;
-          flex-wrap: wrap;
-        }
-
-        .qty-label {
-          font-weight: 700;
-          color: #1a237e;
-          font-size: 14px;
-        }
-
-        .qty-selector {
-          display: flex;
-          align-items: center;
-          border: 1.5px solid #e0e0e0;
-          border-radius: 10px;
-          overflow: hidden;
-          background: #fff;
-        }
-
-        .qty-selector button {
-          background: #f9f9f9;
-          border: none;
-          width: 38px;
-          height: 38px;
-          cursor: pointer;
-          color: #1a237e;
-          font-size: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: all 0.2s;
-        }
-
-        .qty-selector button:hover {
-          background: #1a237e;
-          color: #fff;
-        }
-
-        .qty-value {
-          width: 48px;
-          text-align: center;
-          font-weight: 800;
-          font-size: 15px;
-          color: #1a237e;
-          border-left: 1.5px solid #e0e0e0;
-          border-right: 1.5px solid #e0e0e0;
-          line-height: 38px;
-        }
-
-        /* Action Buttons */
-        .action-buttons {
-          display: flex;
-          gap: 10px;
-          flex-wrap: wrap;
-          margin-top: 6px;
-        }
-
-        .btn {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          border: none;
-          border-radius: 12px;
-          font-weight: 700;
-          font-size: 14px;
-          cursor: pointer;
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-          font-family: inherit;
-          padding: 14px 22px;
-          letter-spacing: 0.3px;
-        }
-
-        .btn-primary {
-          flex: 1 1 180px;
-          background: #1a237e;
-          color: #fff;
-          box-shadow: 0 6px 18px rgba(26, 35, 126, 0.3);
-        }
-
-        .btn-primary:hover:not(:disabled) {
-          background: #3949ab;
-          transform: translateY(-2px);
-          box-shadow: 0 12px 28px rgba(26, 35, 126, 0.4);
-        }
-
-        .btn-primary:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-
-        .btn-accent {
-          flex: 1 1 160px;
-          background: linear-gradient(135deg, #f57c00 0%, #ef6c00 100%);
-          color: #fff;
-          box-shadow: 0 6px 18px rgba(245, 124, 0, 0.35);
-        }
-
-        .btn-accent:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 12px 28px rgba(245, 124, 0, 0.45);
-        }
-
-        .btn-wishlist {
-          flex: 0 0 auto;
-          padding: 14px 18px;
-          background: #fff;
-          color: #1a237e;
-          border: 2px solid #1a237e;
-        }
-
-        .btn-wishlist:hover {
-          background: #e8eaf6;
-          transform: translateY(-2px);
-        }
-
-        .btn-wishlist.active {
-          background: #ffebee;
-          color: #c62828;
-          border-color: #c62828;
-        }
-
-        /* Book Meta Grid */
-        .book-meta {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-          gap: 12px;
-          padding-top: 16px;
-          margin-top: 6px;
-          border-top: 1px solid #f0f0f0;
-        }
-
-        .meta-item {
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-        }
-
-        .meta-label {
-          font-size: 10px;
-          font-weight: 800;
-          color: #999;
-          text-transform: uppercase;
-          letter-spacing: 0.8px;
-        }
-
-        .meta-value {
-          font-size: 13.5px;
-          font-weight: 700;
-          color: #1a237e;
-        }
-
-        .meta-success {
-          color: #2e7d32;
-        }
-
-        /* ================= RELATED SECTION ================= */
-        .related-section {
-          margin-top: 60px;
-        }
-
-        .related-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 24px;
-          flex-wrap: wrap;
-          gap: 12px;
-        }
-
-        .related-title {
-          color: #1a237e;
-          font-weight: 800;
-          font-size: 24px;
-          margin: 0;
-          letter-spacing: -0.5px;
-        }
-
-        .related-title-gradient {
-          background: linear-gradient(135deg, #f57c00 0%, #ff9800 100%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-        }
-
-        .related-view-all {
-          color: #f57c00;
-          font-weight: 700;
-          font-size: 13px;
-          text-decoration: none;
-          border-bottom: 2px solid #f57c00;
-          padding-bottom: 2px;
-        }
-
-        .related-grid {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: 18px;
-        }
-
-        .related-card {
-          text-decoration: none;
-          color: inherit;
-          background: #fff;
-          border-radius: 14px;
-          overflow: hidden;
-          border: 1px solid #f0f0f0;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-          transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .related-card:hover {
-          transform: translateY(-6px);
-          box-shadow: 0 16px 32px rgba(26, 35, 126, 0.12);
-          border-color: transparent;
-        }
-
-        .related-image-wrap {
-          width: 100%;
-          height: 240px;
-          overflow: hidden;
-          background: #f5f5f5;
-        }
-
-        .related-image-wrap img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          transition: transform 0.5s ease;
-        }
-
-        .related-card:hover .related-image-wrap img {
-          transform: scale(1.08);
-        }
-
-        .related-info {
-          padding: 12px 14px 14px;
-        }
-
-        .related-book-title {
-          font-size: 13.5px;
-          font-weight: 700;
-          color: #1a237e;
-          margin: 0 0 3px 0;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-
-        .related-author {
-          font-size: 11px;
-          color: #666;
-          font-weight: 500;
-          margin: 0 0 10px 0;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-
-        .related-bottom {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-
-        .related-price {
-          font-size: 15px;
-          font-weight: 800;
-          color: #f57c00;
-        }
-
-        .related-rating {
-          font-size: 11px;
-          color: #666;
-          font-weight: 700;
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-        }
-
-        .related-rating svg {
-          color: #f57c00;
-          font-size: 10px;
-        }
-
-        /* ==========================================================
-           RESPONSIVE
-           ========================================================== */
-
-        @media (max-width: 1024px) {
-          .details-layout {
-            grid-template-columns: 320px 1fr;
-            gap: 30px;
-            padding: 28px;
-          }
-
-          .image-wrapper {
-            min-height: 400px;
-          }
-
-          .book-title {
-            font-size: 24px;
-          }
-
-          .price-current {
-            font-size: 28px;
-          }
-
-          .related-grid {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-          }
-        }
-
-        @media (max-width: 768px) {
-          .book-details-page {
-            padding: 16px 14px 40px;
-          }
-
-          .breadcrumb {
-            font-size: 11.5px;
-            margin-bottom: 16px;
-          }
-
-          .details-layout {
-            grid-template-columns: 1fr;
-            padding: 20px;
-            gap: 24px;
-            border-radius: 16px;
-          }
-
-          .image-wrapper {
-            min-height: 320px;
-            padding: 16px;
-          }
-
-          .image-wrapper img {
-            max-width: 240px;
-          }
-
-          .trust-badges {
-            gap: 6px;
-          }
-
-          .trust-item {
-            padding: 10px 4px;
-            font-size: 9.5px;
-          }
-
-          .trust-item svg {
-            font-size: 14px;
-          }
-
-          .book-title {
-            font-size: 22px;
-          }
-
-          .price-current {
-            font-size: 26px;
-          }
-
-          .btn {
-            padding: 13px 18px;
-            font-size: 13.5px;
-          }
-
-          .btn-primary,
-          .btn-accent {
-            flex: 1 1 140px;
-          }
-
-          .related-title {
-            font-size: 20px;
-          }
-
-          .related-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 12px;
-          }
-
-          .related-image-wrap {
-            height: 200px;
-          }
-
-          .toast {
-            top: 70px;
-            right: 12px;
-            left: 12px;
-            padding: 12px 16px;
-            font-size: 13px;
-          }
-        }
-
-        @media (max-width: 480px) {
-          .book-details-page {
-            padding: 12px 10px 32px;
-          }
-
-          .details-layout {
-            padding: 16px;
-            border-radius: 14px;
-          }
-
-          .image-wrapper {
-            min-height: 260px;
-            padding: 12px;
-          }
-
-          .image-wrapper img {
-            max-width: 200px;
-          }
-
-          .discount-badge {
-            top: 10px;
-            left: 10px;
-            padding: 4px 10px;
-            font-size: 10.5px;
-          }
-
-          .category-tag {
-            font-size: 10px;
-            padding: 4px 11px;
-          }
-
-          .book-title {
-            font-size: 19px;
-          }
-
-          .stars {
-            font-size: 13px;
-          }
-
-          .book-description {
-            font-size: 13px;
-            line-height: 1.7;
-            padding: 12px 0;
-          }
-
-          .price-current {
-            font-size: 24px;
-          }
-
-          .price-original {
-            font-size: 14px;
-          }
-
-          .save-badge {
-            font-size: 10.5px;
-            padding: 4px 10px;
-          }
-
-          .stock-status {
-            font-size: 12px;
-            padding: 8px 12px;
-          }
-
-          .btn {
-            padding: 12px 16px;
-            font-size: 13px;
-            border-radius: 10px;
-          }
-
-          .btn-wishlist {
-            padding: 12px 16px;
-          }
-
-          .related-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 10px;
-          }
-
-          .related-image-wrap {
-            height: 170px;
-          }
-
-          .related-info {
-            padding: 10px 11px 11px;
-          }
-
-          .related-book-title {
-            font-size: 12.5px;
-          }
-        }
-      `}</style>
     </div>
   );
 };
+
+const css = `
+  .bd-page { padding: 14px 20px 48px; max-width: 1100px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+
+  /* Not found */
+  .bd-notfound { padding: 70px 20px; text-align: center; max-width: 480px; margin: 0 auto; }
+  .bd-notfound h1 { font-size: 64px; color: #1a237e; margin: 0; font-weight: 800; }
+  .bd-notfound h2 { color: #333; margin: 0 0 8px; font-weight: 700; font-size: 20px; }
+  .bd-notfound p { color: #666; margin: 0 0 22px; font-weight: 500; font-size: 14px; }
+  .bd-back { background: #1a237e; color: #fff; padding: 11px 26px; border-radius: 8px; text-decoration: none; font-weight: 700; display: inline-block; }
+
+  /* Toast */
+  .bd-toast { position: fixed; top: 80px; right: 20px; padding: 11px 18px; border-radius: 10px; font-weight: 700; font-size: 13px; z-index: 1100; display: flex; align-items: center; gap: 8px; color: #fff; box-shadow: 0 8px 22px rgba(0,0,0,0.15); animation: bdToastIn 0.25s ease; }
+  .bd-toast-success { background: #2e7d32; }
+  .bd-toast-error { background: #c62828; }
+  @keyframes bdToastIn { from { transform: translateY(-8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+  /* Breadcrumb */
+  .bd-crumb { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; font-size: 12px; font-weight: 600; color: #999; white-space: nowrap; overflow: hidden; }
+  .bd-crumb a { color: #666; text-decoration: none; flex-shrink: 0; }
+  .bd-crumb a:hover { color: #1a237e; }
+  .bd-crumb-sep { font-size: 8px; color: #ccc; flex-shrink: 0; }
+  .bd-crumb-current { color: #1a237e; font-weight: 700; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+  /* Main card */
+  .bd-card { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 26px; background: #fff; padding: 22px; border-radius: 14px; border: 1px solid #eee; box-shadow: 0 2px 12px rgba(26,35,126,0.05); }
+
+  .bd-image { background: #f7f7f9; border-radius: 10px; padding: 14px; display: flex; align-items: center; justify-content: center; aspect-ratio: 3 / 4; align-self: start; }
+  .bd-image img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; box-shadow: 0 6px 16px rgba(0,0,0,0.12); }
+
+  .bd-info { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .bd-head { min-width: 0; }
+  .bd-rest { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+  .bd-head-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+  .bd-cat { background: #e8eaf6; color: #1a237e; padding: 3px 11px; border-radius: 20px; font-size: 11px; font-weight: 800; letter-spacing: 0.4px; }
+  .bd-wish { width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid #ddd; background: #fff; color: #1a237e; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 14px; flex-shrink: 0; }
+  .bd-wish.active { background: #ffebee; color: #c62828; border-color: #c62828; }
+
+  .bd-title { color: #1a237e; font-weight: 800; font-size: 24px; line-height: 1.25; margin: 0 0 4px; word-break: break-word; }
+  .bd-author { color: #666; font-weight: 500; font-size: 13px; margin: 0 0 8px; }
+  .bd-author strong { color: #1a237e; font-weight: 700; }
+
+  .bd-rating { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+  .bd-stars { display: inline-flex; gap: 2px; color: #f57c00; font-size: 13px; }
+  .bd-rating-val { font-weight: 800; color: #1a237e; font-size: 13px; }
+  .bd-rating-count { color: #999; font-size: 12px; font-weight: 600; }
+
+  .bd-price { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .bd-price-now { font-size: 26px; font-weight: 800; color: #f57c00; line-height: 1; }
+  .bd-price-old { font-size: 14px; color: #999; text-decoration: line-through; font-weight: 500; }
+  .bd-price-off { font-size: 12px; font-weight: 800; color: #2e7d32; }
+
+  /* Chips */
+  .bd-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .bd-stock { padding: 4px 11px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+  .bd-stock.in { background: #e8f5e9; color: #2e7d32; }
+  .bd-stock.low { background: #fff3e0; color: #e65100; }
+  .bd-stock.out { background: #ffebee; color: #c62828; }
+  .bd-chip { padding: 4px 11px; border-radius: 20px; background: #f5f5f7; color: #333; font-size: 12px; font-weight: 600; }
+  .bd-chip b { color: #999; font-weight: 700; margin-right: 3px; }
+
+  /* Description */
+  .bd-desc-wrap { border-top: 1px solid #f0f0f0; padding-top: 12px; }
+  .bd-desc { color: #555; font-weight: 500; line-height: 1.65; font-size: 14px; margin: 0; }
+  .bd-desc.clamped { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+  .bd-more { background: none; border: none; color: #1a237e; font-weight: 700; font-size: 13px; padding: 6px 0 0; cursor: pointer; font-family: inherit; }
+
+  /* Quantity */
+  .bd-qty-row { display: flex; align-items: center; gap: 12px; }
+  .bd-qty-label { font-weight: 700; color: #1a237e; font-size: 13px; }
+  .bd-qty { display: inline-flex; align-items: center; border: 1.5px solid #e0e0e0; border-radius: 8px; overflow: hidden; background: #fff; }
+  .bd-qty button { background: #f7f7f9; border: none; width: 34px; height: 34px; cursor: pointer; color: #1a237e; font-size: 11px; display: flex; align-items: center; justify-content: center; }
+  .bd-qty span { min-width: 40px; text-align: center; font-weight: 800; font-size: 14px; color: #1a237e; }
+
+  /* Actions */
+  .bd-actions { display: flex; gap: 10px; }
+  .bd-bar-total { display: none; }
+  .bd-btn { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: none; border-radius: 10px; font-weight: 700; font-size: 14px; cursor: pointer; font-family: inherit; padding: 12px 18px; min-height: 46px; transition: background 0.2s; }
+  .bd-btn-primary { background: #1a237e; color: #fff; }
+  .bd-btn-primary:hover:not(:disabled) { background: #3949ab; }
+  .bd-btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+  .bd-btn-accent { background: #f57c00; color: #fff; }
+  .bd-btn-accent:hover { background: #ef6c00; }
+
+  /* Trust */
+  .bd-trust { display: flex; flex-wrap: wrap; gap: 6px 16px; padding-top: 12px; border-top: 1px solid #f0f0f0; font-size: 12px; font-weight: 600; color: #666; }
+  .bd-trust span { display: inline-flex; align-items: center; gap: 6px; }
+  .bd-trust svg { color: #f57c00; font-size: 13px; }
+
+  /* Related */
+  .bd-related { margin-top: 32px; }
+  .bd-related-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .bd-related-head h2 { color: #1a237e; font-weight: 800; font-size: 20px; margin: 0; }
+  .bd-related-head a { color: #f57c00; font-weight: 700; font-size: 13px; text-decoration: none; }
+  .bd-related-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+  .bd-rcard { text-decoration: none; color: inherit; background: #fff; border-radius: 12px; overflow: hidden; border: 1px solid #eee; transition: box-shadow 0.2s; }
+  .bd-rcard:hover { box-shadow: 0 8px 22px rgba(26,35,126,0.12); }
+  .bd-rimg { width: 100%; aspect-ratio: 3 / 4; background: #f5f5f5; overflow: hidden; }
+  .bd-rimg img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .bd-rinfo { padding: 10px 12px 12px; }
+  .bd-rinfo h3 { font-size: 13px; font-weight: 700; color: #1a237e; margin: 0 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bd-rinfo p { font-size: 11px; color: #666; font-weight: 500; margin: 0 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bd-rbottom { display: flex; justify-content: space-between; align-items: center; }
+  .bd-rprice { font-size: 14px; font-weight: 800; color: #f57c00; }
+  .bd-rrating { font-size: 11px; color: #666; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; }
+  .bd-rrating svg { color: #f57c00; font-size: 10px; }
+
+  /* ============ Tablet ============ */
+  @media (max-width: 900px) {
+    .bd-card { grid-template-columns: 220px minmax(0, 1fr); gap: 20px; padding: 18px; }
+    .bd-title { font-size: 21px; }
+    .bd-related-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+
+  /* ============ Mobile ============ */
+  @media (max-width: 640px) {
+    .bd-page { padding: 10px 12px 96px; }
+    .bd-toast { top: 64px; left: 12px; right: 12px; justify-content: center; }
+    .bd-crumb { margin-bottom: 10px; font-size: 11.5px; }
+
+    /* Compact header: chhoti image left me, title/price right me */
+    .bd-card { grid-template-columns: 108px minmax(0, 1fr); gap: 10px 14px; padding: 14px; border-radius: 12px; box-shadow: none; }
+    .bd-info { display: contents; }
+    .bd-image { padding: 6px; border-radius: 8px; }
+    .bd-image img { box-shadow: 0 3px 8px rgba(0,0,0,0.12); }
+    .bd-head { align-self: start; }
+    .bd-head-top { margin-bottom: 6px; }
+    .bd-cat { font-size: 10px; padding: 2px 9px; }
+    .bd-wish { width: 30px; height: 30px; font-size: 13px; }
+    .bd-title { font-size: 16px; }
+    .bd-author { font-size: 12px; margin-bottom: 6px; }
+    .bd-rating { margin-bottom: 8px; }
+    .bd-price-now { font-size: 21px; }
+    .bd-price-old { font-size: 13px; }
+    .bd-price-off { font-size: 11px; }
+
+    .bd-rest { grid-column: 1 / -1; gap: 12px; }
+    .bd-desc { font-size: 13px; line-height: 1.6; }
+    .bd-desc.clamped { -webkit-line-clamp: 3; }
+
+    /* Sticky bottom bar */
+    .bd-actions {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 1000;
+      background: #fff; align-items: center; gap: 8px;
+      padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+      box-shadow: 0 -4px 16px rgba(0,0,0,0.12);
+    }
+    .bd-bar-total { display: block; line-height: 1.15; padding-right: 2px; }
+    .bd-bar-total small { display: block; font-size: 10px; font-weight: 700; color: #888; }
+    .bd-bar-total strong { font-size: 17px; font-weight: 800; color: #f57c00; }
+    .bd-btn { padding: 11px 8px; font-size: 13px; }
+
+    .bd-qty button { width: 38px; height: 38px; }
+
+    .bd-related { margin-top: 24px; }
+    .bd-related-head h2 { font-size: 17px; }
+    /* Related books: ek line me swipe karne wali list */
+    .bd-related-grid { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -12px; padding: 0 12px 6px; scrollbar-width: none; }
+    .bd-related-grid::-webkit-scrollbar { display: none; }
+    .bd-rcard { flex: 0 0 132px; scroll-snap-align: start; }
+    .bd-rinfo { padding: 8px 10px 10px; }
+    .bd-rinfo h3 { font-size: 12px; }
+  }
+`;
 
 export default BookDetails;
