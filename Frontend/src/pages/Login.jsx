@@ -24,15 +24,19 @@ const Login = () => {
 
       if (result.success) {
         setStep('otp');
-        // Only appears in local dev; the production server never returns the OTP
-        if (result.data?.otp) setOtpSent(result.data.otp);
+        if (result.data?.otp) {
+          setOtpSent(result.data.otp);
+          alert(`📱 OTP Sent!\n\nYour OTP: ${result.data.otp}`);
+        } else {
+          alert('📱 OTP generated. Please check with the admin / server console.');
+        }
       } else {
         setError(result.message);
       }
     } catch (err) {
       setError('Something went wrong. Please try again.');
     } finally {
-      setLoading(false); // button can never get stuck again
+      setLoading(false);
     }
   };
 
@@ -42,35 +46,39 @@ const Login = () => {
     setError('');
     setLoading(true);
 
-    const result = await verifyOtp(identifier, otp);
+    try {
+      const result = await verifyOtp(identifier, otp);
 
-    if (result.success) {
-      if (result.data.isNewUser) {
-        // New user → Register page pe bhejo (identifier pass karo)
-        navigate('/register', {
-          state: {
-            identifier: result.data.identifier,
-            type: result.data.type,
-          },
-          replace: true,
-        });
-      } else {
-        // Existing user → Login ho gaya
-        const isAdmin =
-          result.data.user?.isAdmin === true ||
-          result.data.user?.role === 'admin';
-
-        if (isAdmin) {
-          navigate('/admin/dashboard', { replace: true });
+      if (result.success) {
+        if (result.data.isNewUser) {
+          // New user → Register page pe bhejo (identifier pass karo)
+          navigate('/register', {
+            state: {
+              identifier: result.data.identifier,
+              type: result.data.type,
+            },
+            replace: true,
+          });
         } else {
-          navigate('/', { replace: true });
-        }
-      }
-    } else {
-      setError(result.message);
-    }
+          // Existing user → Login ho gaya
+          const isAdmin =
+            result.data.user?.isAdmin === true ||
+            result.data.user?.role === 'admin';
 
-    setLoading(false);
+          if (isAdmin) {
+            navigate('/admin/dashboard', { replace: true });
+          } else {
+            navigate('/', { replace: true });
+          }
+        }
+      } else {
+        setError(result.message);
+      }
+    } catch (err) {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // ===== Resend OTP =====
@@ -80,7 +88,15 @@ const Login = () => {
 
     try {
       const result = await sendOtp(identifier);
-      if (!result.success) setError(result.message);
+
+      if (result.success) {
+        if (result.data?.otp) {
+          setOtpSent(result.data.otp);
+          alert(`📱 OTP Resent!\n\nYour OTP: ${result.data.otp}`);
+        }
+      } else {
+        setError(result.message);
+      }
     } catch (err) {
       setError('Something went wrong. Please try again.');
     } finally {
