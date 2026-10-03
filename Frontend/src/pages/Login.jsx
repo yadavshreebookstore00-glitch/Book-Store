@@ -19,18 +19,21 @@ const Login = () => {
     setError('');
     setLoading(true);
 
-    const result = await sendOtp(identifier);
+    try {
+      const result = await sendOtp(identifier);
 
-    if (result.success) {
-      setStep('otp');
-      // ⚠️ Dev mode: OTP alert me dikhao (production me hatana)
-      setOtpSent(result.data.otp);
-      alert(`📱 OTP Sent! (Dev Mode)\n\nYour OTP: ${result.data.otp}`);
-    } else {
-      setError(result.message);
+      if (result.success) {
+        setStep('otp');
+        // Only appears in local dev; the production server never returns the OTP
+        if (result.data?.otp) setOtpSent(result.data.otp);
+      } else {
+        setError(result.message);
+      }
+    } catch (err) {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setLoading(false); // button can never get stuck again
     }
-
-    setLoading(false);
   };
 
   // ===== Step 2: Verify OTP =====
@@ -74,14 +77,15 @@ const Login = () => {
   const handleResendOtp = async () => {
     setError('');
     setLoading(true);
-    const result = await sendOtp(identifier);
-    if (result.success) {
-      setOtpSent(result.data.otp);
-      alert(`📱 OTP Resent! (Dev Mode)\n\nYour OTP: ${result.data.otp}`);
-    } else {
-      setError(result.message);
+
+    try {
+      const result = await sendOtp(identifier);
+      if (!result.success) setError(result.message);
+    } catch (err) {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
