@@ -1,14 +1,16 @@
-import Otp from '../models/Otp.js';
-import User from '../models/User.js';
-import generateToken from '../utils/generateToken.js';
+import crypto from "crypto";
+import Otp from "../models/Otp.js";
+import User from "../models/User.js";
+import generateToken from "../utils/generateToken.js";
+import { sendOtpMessage } from "../utils/sendOtpMessage.js";
 
 // ===== Helper: Detect email ya mobile =====
 const detectType = (identifier) => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const mobileRegex = /^[6-9]\d{9}$/; // Indian 10-digit
 
-  if (emailRegex.test(identifier)) return 'email';
-  if (mobileRegex.test(identifier)) return 'mobile';
+  if (emailRegex.test(identifier)) return "email";
+  if (mobileRegex.test(identifier)) return "mobile";
   return null;
 };
 
@@ -19,8 +21,8 @@ export const sendOtp = async (req, res) => {
   try {
     const { identifier } = req.body;
 
-    if (!identifier) {
-      return res.status(400).json({ message: 'Email or mobile is required' });
+    if (!identifier || typeof identifier !== "string") {
+      return res.status(400).json({ message: "Email or mobile is required" });
     }
 
     const cleanIdentifier = identifier.trim().toLowerCase();
@@ -29,16 +31,28 @@ export const sendOtp = async (req, res) => {
     if (!type) {
       return res
         .status(400)
-        .json({ message: 'Please enter a valid email or 10-digit mobile number' });
+        .json({
+          message: "Please enter a valid email or 10-digit mobile number",
+        });
     }
 
-    // Delete any previous OTPs for this identifier
+    // Simple resend throttle: 30 seconds between OTPs per identifier
+    const last = await Otp.findOne({ identifier: cleanIdentifier }).sort({
+      createdAt: -1,
+    });
+    if (last && Date.now() - new Date(last.createdAt).getTime() < 30 * 1000) {
+      return res
+        .status(429)
+        .json({
+          message: "Please wait 30 seconds before requesting another OTP",
+        });
+    }
+
+    // Generate 6-digit OTP (cryptographically secure)
+    const otp = crypto.randomInt(100000, 1000000).toString();
+
+    // Replace any previous OTPs for this identifier
     await Otp.deleteMany({ identifier: cleanIdentifier });
-
-    // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-    // Save OTP to DB
     await Otp.create({
       identifier: cleanIdentifier,
       otp,
@@ -46,18 +60,48 @@ export const sendOtp = async (req, res) => {
       expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 min
     });
 
-    console.log(`📧 OTP for ${cleanIdentifier}: ${otp}`);
+    // ===== ACTUALLY SEND THE OTP =====
+    try {
+      await sendOtpMessage(type, cleanIdentifier, otp);
+    } catch (sendError) {
+      console.error("❌ OTP delivery failed:", sendError.message);
+      await Otp.deleteMany({ identifier: cleanIdentifier });
 
+      // Local development only: allow testing without a provider
+      if (process.env.NODE_ENV !== "production") {
+        console.log(`🔧 DEV OTP for ${cleanIdentifier}: ${otp}`);
+        await Otp.create({
+          identifier: cleanIdentifier,
+          otp,
+          type,
+          expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+        });
+        return res.json({
+          success: true,
+          message: `DEV MODE: OTP generated (delivery failed)`,
+          otp,
+          type,
+          identifier: cleanIdentifier,
+        });
+      }
+
+      return res.status(502).json({
+        message: `Could not send OTP to your ${type}. Please try again in a moment.`,
+      });
+    }
+
+    // Never return the OTP in production
     res.json({
       success: true,
       message: `OTP sent to your ${type}`,
-      otp, // ⚠️ Dev only - production me hata dein
       type,
       identifier: cleanIdentifier,
     });
   } catch (error) {
-    console.error('Send OTP error:', error);
-    res.status(500).json({ message: error.message });
+    console.error("Send OTP error:", error);
+    res
+      .status(500)
+      .json({ message: "Something went wrong. Please try again." });
   }
 };
 
@@ -71,7 +115,7 @@ export const verifyOtp = async (req, res) => {
     if (!identifier || !otp) {
       return res
         .status(400)
-        .json({ message: 'Identifier and OTP are required' });
+        .json({ message: "Identifier and OTP are required" });
     }
 
     const cleanIdentifier = identifier.trim().toLowerCase();
@@ -79,18 +123,18 @@ export const verifyOtp = async (req, res) => {
     // ===== Step 1: Find valid OTP =====
     const otpRecord = await Otp.findOne({
       identifier: cleanIdentifier,
-      otp,
+      otp: String(otp).trim(),
     });
 
     if (!otpRecord) {
-      return res.status(400).json({ message: 'Invalid OTP' });
+      return res.status(400).json({ message: "Invalid OTP" });
     }
 
     if (otpRecord.expiresAt < new Date()) {
       await Otp.deleteMany({ identifier: cleanIdentifier });
       return res
         .status(400)
-        .json({ message: 'OTP has expired. Please request a new one.' });
+        .json({ message: "OTP has expired. Please request a new one." });
     }
 
     // Mark OTP as verified
@@ -100,23 +144,24 @@ export const verifyOtp = async (req, res) => {
     const type = otpRecord.type;
 
     // ===== Step 2: ADMIN CHECK (ENV se) =====
-    const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+    const ADMIN_EMAIL = process.env.ADMIN_EMAIL
+      ? process.env.ADMIN_EMAIL.trim().toLowerCase()
+      : null;
 
-    if (type === 'email' && cleanIdentifier === ADMIN_EMAIL) {
-      // Admin login
+    if (type === "email" && ADMIN_EMAIL && cleanIdentifier === ADMIN_EMAIL) {
       let adminUser = await User.findOne({ email: ADMIN_EMAIL });
 
       if (!adminUser) {
         adminUser = await User.create({
-          name: process.env.ADMIN_NAME || 'Admin',
+          name: process.env.ADMIN_NAME || "Admin",
           email: ADMIN_EMAIL,
           password: process.env.ADMIN_PASSWORD,
           isAdmin: true,
-          role: 'admin',
+          role: "admin",
         });
       } else if (!adminUser.isAdmin) {
         adminUser.isAdmin = true;
-        adminUser.role = 'admin';
+        adminUser.role = "admin";
         await adminUser.save();
       }
 
@@ -125,13 +170,13 @@ export const verifyOtp = async (req, res) => {
       return res.json({
         success: true,
         isNewUser: false,
-        message: 'Admin login successful',
+        message: "Admin login successful",
         user: {
           _id: adminUser._id,
           name: adminUser.name,
           email: adminUser.email,
           isAdmin: true,
-          role: 'admin',
+          role: "admin",
           token: generateToken(adminUser._id),
         },
       });
@@ -139,20 +184,19 @@ export const verifyOtp = async (req, res) => {
 
     // ===== Step 3: NORMAL USER CHECK (DB se) =====
     let user;
-    if (type === 'email') {
+    if (type === "email") {
       user = await User.findOne({ email: cleanIdentifier });
     } else {
       user = await User.findOne({ phone: cleanIdentifier });
     }
 
     if (user) {
-      // User exists → Login
       await Otp.deleteMany({ identifier: cleanIdentifier });
 
       return res.json({
         success: true,
         isNewUser: false,
-        message: 'OTP verified! Logging in...',
+        message: "OTP verified! Logging in...",
         user: {
           _id: user._id,
           name: user.name,
@@ -168,14 +212,16 @@ export const verifyOtp = async (req, res) => {
       return res.json({
         success: true,
         isNewUser: true,
-        message: 'OTP verified! Please complete registration.',
+        message: "OTP verified! Please complete registration.",
         identifier: cleanIdentifier,
         type,
       });
     }
   } catch (error) {
-    console.error('Verify OTP error:', error);
-    res.status(500).json({ message: error.message });
+    console.error("Verify OTP error:", error);
+    res
+      .status(500)
+      .json({ message: "Something went wrong. Please try again." });
   }
 };
 
@@ -187,20 +233,31 @@ export const registerWithOtp = async (req, res) => {
     const { identifier, type, name, password } = req.body;
 
     if (!identifier || !type || !name || !password) {
-      return res.status(400).json({ message: 'All fields are required' });
+      return res.status(400).json({ message: "All fields are required" });
     }
 
     if (password.length < 6) {
       return res
         .status(400)
-        .json({ message: 'Password must be at least 6 characters' });
+        .json({ message: "Password must be at least 6 characters" });
     }
 
     const cleanIdentifier = identifier.trim().toLowerCase();
 
+    // Registration is allowed only if this identifier's OTP was verified
+    const verifiedOtp = await Otp.findOne({
+      identifier: cleanIdentifier,
+      verified: true,
+    });
+    if (!verifiedOtp) {
+      return res
+        .status(403)
+        .json({ message: "Please verify your OTP before registering" });
+    }
+
     // Double check: User already exists?
     let existingUser;
-    if (type === 'email') {
+    if (type === "email") {
       existingUser = await User.findOne({ email: cleanIdentifier });
     } else {
       existingUser = await User.findOne({ phone: cleanIdentifier });
@@ -209,13 +266,13 @@ export const registerWithOtp = async (req, res) => {
     if (existingUser) {
       return res
         .status(400)
-        .json({ message: 'User already exists. Please login.' });
+        .json({ message: "User already exists. Please login." });
     }
 
     // Prepare user data
     const userData = { name, password };
 
-    if (type === 'email') {
+    if (type === "email") {
       userData.email = cleanIdentifier;
     } else {
       userData.phone = cleanIdentifier;
@@ -228,7 +285,7 @@ export const registerWithOtp = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Registration successful!',
+      message: "Registration successful!",
       user: {
         _id: user._id,
         name: user.name,
@@ -240,7 +297,9 @@ export const registerWithOtp = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Register with OTP error:', error);
-    res.status(500).json({ message: error.message });
+    console.error("Register with OTP error:", error);
+    res
+      .status(500)
+      .json({ message: "Something went wrong. Please try again." });
   }
 };
