@@ -2,7 +2,6 @@ import crypto from "crypto";
 import Otp from "../models/Otp.js";
 import User from "../models/User.js";
 import generateToken from "../utils/generateToken.js";
-import { sendOtpMessage } from "../utils/sendOtpMessage.js";
 
 // ===== Helper: Detect email ya mobile =====
 const detectType = (identifier) => {
@@ -60,40 +59,19 @@ export const sendOtp = async (req, res) => {
       expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 min
     });
 
-    // ===== ACTUALLY SEND THE OTP =====
-    try {
-      await sendOtpMessage(type, cleanIdentifier, otp);
-    } catch (sendError) {
-      console.error("❌ OTP delivery failed:", sendError.message);
-      await Otp.deleteMany({ identifier: cleanIdentifier });
+    // ===== CONSOLE OTP (visible in Render logs) =====
+    console.log(`📧 OTP for ${cleanIdentifier}: ${otp}`);
 
-      // Local development only: allow testing without a provider
-      if (process.env.NODE_ENV !== "production") {
-        console.log(`🔧 DEV OTP for ${cleanIdentifier}: ${otp}`);
-        await Otp.create({
-          identifier: cleanIdentifier,
-          otp,
-          type,
-          expiresAt: new Date(Date.now() + 5 * 60 * 1000),
-        });
-        return res.json({
-          success: true,
-          message: `DEV MODE: OTP generated (delivery failed)`,
-          otp,
-          type,
-          identifier: cleanIdentifier,
-        });
-      }
+    // The admin OTP is never sent to the browser; read it from the server console.
+    const adminEmail = process.env.ADMIN_EMAIL
+      ? process.env.ADMIN_EMAIL.trim().toLowerCase()
+      : null;
+    const isAdminIdentifier = adminEmail && cleanIdentifier === adminEmail;
 
-      return res.status(502).json({
-        message: `Could not send OTP to your ${type}. Please try again in a moment.`,
-      });
-    }
-
-    // Never return the OTP in production
     res.json({
       success: true,
       message: `OTP sent to your ${type}`,
+      ...(isAdminIdentifier ? {} : { otp }), // alert OTP for normal users
       type,
       identifier: cleanIdentifier,
     });
