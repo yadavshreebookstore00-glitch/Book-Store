@@ -22,18 +22,27 @@ const Login = () => {
     try {
       const result = await sendOtp(identifier);
 
+      console.log('🔍 sendOtp result:', result);
+
       if (result.success) {
         setStep('otp');
-        if (result.data?.otp) {
-          setOtpSent(result.data.otp);
-          alert(`📱 OTP Sent!\n\nYour OTP: ${result.data.otp}`);
+
+        // ✅ OTP alert me dikhao
+        const receivedOtp = result.data?.otp;
+
+        if (receivedOtp) {
+          setOtpSent(receivedOtp);
+          alert(
+            `📱 OTP Sent Successfully!\n\n🔑 Your OTP: ${receivedOtp}\n\n⏱ Valid for 5 minutes`
+          );
         } else {
-          alert('📱 OTP generated. Please check with the admin / server console.');
+          alert('📱 OTP sent! Please check server console for the code.');
         }
       } else {
         setError(result.message);
       }
     } catch (err) {
+      console.error('Send OTP error:', err);
       setError('Something went wrong. Please try again.');
     } finally {
       setLoading(false);
@@ -51,7 +60,7 @@ const Login = () => {
 
       if (result.success) {
         if (result.data.isNewUser) {
-          // New user → Register page pe bhejo (identifier pass karo)
+          // New user → Register page
           navigate('/register', {
             state: {
               identifier: result.data.identifier,
@@ -60,7 +69,7 @@ const Login = () => {
             replace: true,
           });
         } else {
-          // Existing user → Login ho gaya
+          // Existing user
           const isAdmin =
             result.data.user?.isAdmin === true ||
             result.data.user?.role === 'admin';
@@ -90,9 +99,13 @@ const Login = () => {
       const result = await sendOtp(identifier);
 
       if (result.success) {
-        if (result.data?.otp) {
-          setOtpSent(result.data.otp);
-          alert(`📱 OTP Resent!\n\nYour OTP: ${result.data.otp}`);
+        const receivedOtp = result.data?.otp;
+
+        if (receivedOtp) {
+          setOtpSent(receivedOtp);
+          alert(`📱 OTP Resent!\n\n🔑 Your OTP: ${receivedOtp}`);
+        } else {
+          alert('📱 OTP resent! Check server console.');
         }
       } else {
         setError(result.message);
@@ -106,23 +119,27 @@ const Login = () => {
 
   return (
     <div>
-      <h2 style={{
-        color: '#1a237e',
-        textAlign: 'center',
-        marginBottom: '10px',
-        fontWeight: 800,
-        fontSize: '26px',
-        letterSpacing: '-0.5px'
-      }}>
+      <h2
+        style={{
+          color: '#1a237e',
+          textAlign: 'center',
+          marginBottom: '10px',
+          fontWeight: 800,
+          fontSize: '26px',
+          letterSpacing: '-0.5px',
+        }}
+      >
         {step === 'input' ? 'Welcome Back' : 'Verify OTP'}
       </h2>
-      <p style={{
-        textAlign: 'center',
-        color: '#666',
-        fontSize: '14px',
-        fontWeight: 500,
-        marginBottom: '25px'
-      }}>
+      <p
+        style={{
+          textAlign: 'center',
+          color: '#666',
+          fontSize: '14px',
+          fontWeight: 500,
+          marginBottom: '25px',
+        }}
+      >
         {step === 'input'
           ? 'Login with Email or Mobile number'
           : `OTP sent to ${identifier}`}
@@ -130,23 +147,28 @@ const Login = () => {
 
       {/* Error */}
       {error && (
-        <div style={{
-          background: '#ffebee',
-          color: '#c62828',
-          padding: '12px',
-          borderRadius: '6px',
-          marginBottom: '15px',
-          fontSize: '13px',
-          fontWeight: 600,
-          borderLeft: '4px solid #c62828'
-        }}>
+        <div
+          style={{
+            background: '#ffebee',
+            color: '#c62828',
+            padding: '12px',
+            borderRadius: '6px',
+            marginBottom: '15px',
+            fontSize: '13px',
+            fontWeight: 600,
+            borderLeft: '4px solid #c62828',
+          }}
+        >
           ⚠️ {error}
         </div>
       )}
 
       {/* ========== STEP 1: Input ========== */}
       {step === 'input' && (
-        <form onSubmit={handleSendOtp} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+        <form
+          onSubmit={handleSendOtp}
+          style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}
+        >
           <input
             type="text"
             placeholder="Email or Mobile Number"
@@ -161,15 +183,17 @@ const Login = () => {
               fontSize: '14px',
               fontWeight: 500,
               outline: 'none',
-              background: loading ? '#f5f5f5' : '#fff'
+              background: loading ? '#f5f5f5' : '#fff',
             }}
           />
-          <p style={{
-            fontSize: '12px',
-            color: '#999',
-            fontWeight: 500,
-            marginTop: '-8px'
-          }}>
+          <p
+            style={{
+              fontSize: '12px',
+              color: '#999',
+              fontWeight: 500,
+              marginTop: '-8px',
+            }}
+          >
             Example: yourname@email.com or 9876543210
           </p>
 
@@ -185,7 +209,7 @@ const Login = () => {
               fontSize: '15px',
               fontWeight: 700,
               cursor: loading ? 'not-allowed' : 'pointer',
-              letterSpacing: '0.5px'
+              letterSpacing: '0.5px',
             }}
           >
             {loading ? '⏳ Sending OTP...' : '📩 Send OTP'}
@@ -195,12 +219,17 @@ const Login = () => {
 
       {/* ========== STEP 2: OTP Verify ========== */}
       {step === 'otp' && (
-        <form onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+        <form
+          onSubmit={handleVerifyOtp}
+          style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}
+        >
           <input
             type="text"
             placeholder="Enter 6-digit OTP"
             value={otp}
-            onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            onChange={(e) =>
+              setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))
+            }
             required
             disabled={loading}
             maxLength={6}
@@ -213,7 +242,7 @@ const Login = () => {
               outline: 'none',
               textAlign: 'center',
               letterSpacing: '8px',
-              background: loading ? '#f5f5f5' : '#fff'
+              background: loading ? '#f5f5f5' : '#fff',
             }}
           />
 
@@ -229,29 +258,36 @@ const Login = () => {
               fontSize: '15px',
               fontWeight: 700,
               cursor: loading ? 'not-allowed' : 'pointer',
-              letterSpacing: '0.5px'
+              letterSpacing: '0.5px',
             }}
           >
             {loading ? '⏳ Verifying...' : '✅ Verify & Continue'}
           </button>
 
-          {/* Resend + Change number */}
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            fontSize: '13px',
-            fontWeight: 600
-          }}>
+          {/* Resend + Change */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontSize: '13px',
+              fontWeight: 600,
+            }}
+          >
             <button
               type="button"
-              onClick={() => { setStep('input'); setOtp(''); setError(''); setOtpSent(''); }}
+              onClick={() => {
+                setStep('input');
+                setOtp('');
+                setError('');
+                setOtpSent('');
+              }}
               style={{
                 background: 'none',
                 border: 'none',
                 color: '#1a237e',
                 cursor: 'pointer',
                 fontWeight: 600,
-                textDecoration: 'underline'
+                textDecoration: 'underline',
               }}
             >
               ← Change
@@ -266,7 +302,7 @@ const Login = () => {
                 color: '#f57c00',
                 cursor: loading ? 'not-allowed' : 'pointer',
                 fontWeight: 700,
-                textDecoration: 'underline'
+                textDecoration: 'underline',
               }}
             >
               Resend OTP
@@ -276,12 +312,14 @@ const Login = () => {
       )}
 
       {/* Register Link */}
-      <p style={{
-        textAlign: 'center',
-        marginTop: '25px',
-        fontSize: '14px',
-        fontWeight: 500
-      }}>
+      <p
+        style={{
+          textAlign: 'center',
+          marginTop: '25px',
+          fontSize: '14px',
+          fontWeight: 500,
+        }}
+      >
         New here? Just enter your details above — we'll register you automatically.
       </p>
     </div>
