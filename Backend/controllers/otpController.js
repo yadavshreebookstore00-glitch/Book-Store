@@ -28,11 +28,9 @@ export const sendOtp = async (req, res) => {
     const type = detectType(cleanIdentifier);
 
     if (!type) {
-      return res
-        .status(400)
-        .json({
-          message: "Please enter a valid email or 10-digit mobile number",
-        });
+      return res.status(400).json({
+        message: "Please enter a valid email or 10-digit mobile number",
+      });
     }
 
     // Simple resend throttle: 30 seconds between OTPs per identifier
@@ -40,11 +38,9 @@ export const sendOtp = async (req, res) => {
       createdAt: -1,
     });
     if (last && Date.now() - new Date(last.createdAt).getTime() < 30 * 1000) {
-      return res
-        .status(429)
-        .json({
-          message: "Please wait 30 seconds before requesting another OTP",
-        });
+      return res.status(429).json({
+        message: "Please wait 30 seconds before requesting another OTP",
+      });
     }
 
     // Generate 6-digit OTP (cryptographically secure)
@@ -60,20 +56,20 @@ export const sendOtp = async (req, res) => {
     });
 
     // ===== CONSOLE OTP (visible in Render logs) =====
-    console.log(`📧 OTP for ${cleanIdentifier}: ${otp}`);
+    console.log("═══════════════════════════════════════");
+    console.log(`📧 OTP for ${cleanIdentifier}`);
+    console.log(`🔑 OTP: ${otp}`);
+    console.log(`⏱  Valid for 5 minutes`);
+    console.log("═══════════════════════════════════════");
 
-    // The admin OTP is never sent to the browser; read it from the server console.
-    const adminEmail = process.env.ADMIN_EMAIL
-      ? process.env.ADMIN_EMAIL.trim().toLowerCase()
-      : null;
-    const isAdminIdentifier = adminEmail && cleanIdentifier === adminEmail;
-
+    // ✅ FIXED: Always send OTP in response (dev mode)
     res.json({
       success: true,
       message: `OTP sent to your ${type}`,
-      ...(isAdminIdentifier ? {} : { otp }), // alert OTP for normal users
+      otp, // ✅ Always include OTP (dev mode)
       type,
       identifier: cleanIdentifier,
+      expiresIn: 300, // seconds
     });
   } catch (error) {
     console.error("Send OTP error:", error);
@@ -145,6 +141,8 @@ export const verifyOtp = async (req, res) => {
 
       await Otp.deleteMany({ identifier: cleanIdentifier });
 
+      console.log("👑 Admin login successful:", ADMIN_EMAIL);
+
       return res.json({
         success: true,
         isNewUser: false,
@@ -170,6 +168,8 @@ export const verifyOtp = async (req, res) => {
 
     if (user) {
       await Otp.deleteMany({ identifier: cleanIdentifier });
+
+      console.log("👤 User login successful:", cleanIdentifier);
 
       return res.json({
         success: true,
