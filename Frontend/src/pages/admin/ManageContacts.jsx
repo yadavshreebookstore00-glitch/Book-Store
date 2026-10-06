@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   FaEnvelope,
   FaPhone,
@@ -6,773 +6,754 @@ import {
   FaSearch,
   FaEye,
   FaTimes,
-  FaCheckCircle,
   FaClock,
   FaReply,
   FaArchive,
   FaEnvelopeOpen,
+  FaEllipsisV,
+  FaCheckCircle,
+  FaSpinner,
 } from 'react-icons/fa';
 import api from '../../services/api';
+import styles from './ManageContacts.module.css';
+import useDebounce from '../../hooks/useDebounce';
 
-const statusColors = {
-  new: { bg: '#fff3e0', color: '#f57c00', label: 'New' },
-  read: { bg: '#e3f2fd', color: '#1976d2', label: 'Read' },
-  replied: { bg: '#e8f5e9', color: '#2e7d32', label: 'Replied' },
-  closed: { bg: '#f5f5f5', color: '#666', label: 'Closed' },
+const statusConfig = {
+  new:     { bg: '#fff7ed', color: '#c2410c', label: 'New' },
+  read:    { bg: '#eff6ff', color: '#1d4ed8', label: 'Read' },
+  replied: { bg: '#f0fdf4', color: '#15803d', label: 'Replied' },
+  closed:  { bg: '#f1f5f9', color: '#475569', label: 'Closed' },
 };
 
+// ===== Highlight helper =====
+const Highlight = ({ text, query }) => {
+  if (!query || !text) return <>{text}</>;
+  const q = query.toLowerCase();
+  const t = String(text);
+  const idx = t.toLowerCase().indexOf(q);
+  if (idx === -1) return <>{t}</>;
+  return (
+    <>
+      {t.slice(0, idx)}
+      <span className={styles.highlight}>{t.slice(idx, idx + q.length)}</span>
+      {t.slice(idx + q.length)}
+    </>
+  );
+};
+
+// ===== Skeleton =====
+const SkeletonRow = () => (
+  <div className={styles.skeletonRow}>
+    <div className={`${styles.skAvatar}`} />
+    <div className={`${styles.skeletonCol} ${styles.skCol1}`}>
+      <div className={`${styles.skLine} ${styles.skLine1}`} />
+      <div className={`${styles.skLine} ${styles.skLine2}`} />
+    </div>
+    <div className={`${styles.skeletonCol} ${styles.skCol2}`}>
+      <div className={`${styles.skLine} ${styles.skLine3}`} />
+      <div className={`${styles.skLine} ${styles.skLine4}`} />
+    </div>
+    <div className={`${styles.skeletonCol} ${styles.skCol3}`}>
+      <div className={`${styles.skLine} ${styles.skLine3}`} />
+    </div>
+    <div className={`${styles.skeletonCol} ${styles.skCol4}`}>
+      <div className={`${styles.skLine} ${styles.skLine3}`} />
+    </div>
+    <div className={`${styles.skeletonCol} ${styles.skCol5}`}>
+      <div className={`${styles.skLine} ${styles.skLine4}`} />
+    </div>
+    <div className={`${styles.skeletonCol} ${styles.skCol6}`}>
+      <div className={`${styles.skLine} ${styles.skLine4}`} />
+    </div>
+  </div>
+);
+
+const SkeletonTable = ({ rows = 8 }) => (
+  <div className={styles.skeletonWrap}>
+    {Array.from({ length: rows }).map((_, i) => (
+      <SkeletonRow key={i} />
+    ))}
+  </div>
+);
+
+// ============================================================
+// MAIN COMPONENT
+// ============================================================
 const ManageContacts = () => {
   const [contacts, setContacts] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [fetching, setFetching] = useState(false);
   const [error, setError] = useState('');
 
-  // Filters
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
-  // Modal
   const [selectedContact, setSelectedContact] = useState(null);
   const [showModal, setShowModal] = useState(false);
 
-  // ===== Fetch Contacts =====
-  const fetchContacts = async () => {
+  // ===== Menu: track position so it never goes off-screen =====
+  const [menu, setMenu] = useState({
+    open: false,
+    id: null,
+    top: 0,
+    left: 0,
+  });
+  const menuRef = useRef(null);
+  const scrollYRef = useRef(0);
+  const abortRef = useRef(null);
+  const isFirstLoad = useRef(true);
+
+  const debouncedSearch = useDebounce(searchTerm, 500);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, statusFilter]);
+
+  // ===== Fetch =====
+  const fetchContacts = useCallback(async () => {
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
-      setLoading(true);
+      if (isFirstLoad.current) setLoading(true);
+      else setFetching(true);
+      setError('');
+
       const params = new URLSearchParams();
       params.append('page', page);
       params.append('limit', 15);
       if (statusFilter !== 'all') params.append('status', statusFilter);
-      if (searchTerm) params.append('search', searchTerm);
+      if (debouncedSearch) params.append('search', debouncedSearch);
 
-      const { data } = await api.get(`/contacts?${params.toString()}`);
+      const { data } = await api.get(`/contacts?${params.toString()}`, {
+        signal: controller.signal,
+      });
+
       setContacts(data.contacts || []);
       setTotalPages(data.pages || 1);
       setStats(data.stats || null);
+      isFirstLoad.current = false;
     } catch (err) {
+      if (err.name === 'CanceledError' || err.code === 'ERR_CANCELED') return;
       setError(err.response?.data?.message || 'Failed to load contacts');
     } finally {
       setLoading(false);
+      setFetching(false);
     }
-  };
+  }, [page, statusFilter, debouncedSearch]);
 
   useEffect(() => {
     fetchContacts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, statusFilter, searchTerm]);
+  }, [fetchContacts]);
 
-  // ===== Open Contact Detail =====
-  const openContact = async (contact) => {
-    setSelectedContact(contact);
-    setShowModal(true);
+  useEffect(() => {
+    return () => {
+      if (abortRef.current) abortRef.current.abort();
+    };
+  }, []);
 
-    // Auto-mark as read if new
-    if (contact.status === 'new') {
-      try {
-        const { data } = await api.put(`/contacts/${contact._id}`, {
-          status: 'read',
+  // ===== Close menu on outside click =====
+  useEffect(() => {
+    if (!menu.open) return;
+    const handleClick = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenu((m) => ({ ...m, open: false }));
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('touchstart', handleClick, { passive: true });
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('touchstart', handleClick);
+    };
+  }, [menu.open]);
+
+  // ===== Close menu on scroll (throttled via rAF) =====
+  useEffect(() => {
+    if (!menu.open) return;
+    let ticking = false;
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          setMenu((m) => ({ ...m, open: false }));
+          ticking = false;
         });
-        setContacts(
-          contacts.map((c) => (c._id === contact._id ? data : c))
-        );
-        setSelectedContact(data);
-      } catch (err) {
-        console.error('Failed to update status:', err);
+        ticking = true;
+      }
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [menu.open]);
+
+  // ===== iOS-safe body scroll lock =====
+  useEffect(() => {
+    if (showModal) {
+      scrollYRef.current = window.scrollY;
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollYRef.current}px`;
+      document.body.style.width = '100%';
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+      if (scrollYRef.current) {
+        window.scrollTo(0, scrollYRef.current);
+        scrollYRef.current = 0;
       }
     }
-  };
+    return () => {
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+    };
+  }, [showModal]);
 
-  // ===== Update Status =====
-  const updateStatus = async (id, newStatus) => {
-    try {
-      const { data } = await api.put(`/contacts/${id}`, {
-        status: newStatus,
-      });
-      setContacts(contacts.map((c) => (c._id === id ? data : c)));
-      if (selectedContact?._id === id) setSelectedContact(data);
-      fetchContacts();
-    } catch (err) {
-      alert('Failed to update status');
+  // ===== SMART MENU POSITION =====
+  // Opens up if no room below, and clamps to viewport edges
+  const openMenuAt = useCallback((e, contactId) => {
+    e.stopPropagation();
+    e.preventDefault();
+
+    // If already open for this row → close
+    if (menu.open && menu.id === contactId) {
+      setMenu((m) => ({ ...m, open: false }));
+      return;
     }
-  };
 
-  // ===== Delete Contact =====
-  const handleDelete = async (id) => {
-    if (!window.confirm('Delete this contact message?')) return;
-    try {
-      await api.delete(`/contacts/${id}`);
-      setContacts(contacts.filter((c) => c._id !== id));
+    const btn = e.currentTarget;
+    const rect = btn.getBoundingClientRect();
+    const menuWidth = 200;
+    const menuHeight = 260; // approx
+    const gap = 6;
+    const edge = 8;
+
+    // Horizontal: prefer right-aligned to button
+    let left = rect.right - menuWidth;
+    if (left < edge) left = edge;
+    if (left + menuWidth > window.innerWidth - edge) {
+      left = window.innerWidth - menuWidth - edge;
+    }
+
+    // Vertical: open down if room, else up
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    let top;
+    if (spaceBelow >= menuHeight + gap) {
+      top = rect.bottom + gap;
+    } else if (spaceAbove >= menuHeight + gap) {
+      top = rect.top - menuHeight - gap;
+    } else {
+      // Not enough either way → pin to top edge with scroll
+      top = Math.max(edge, window.innerHeight - menuHeight - edge);
+    }
+
+    setMenu({ open: true, id: contactId, top, left });
+  }, [menu.open, menu.id]);
+
+  // ===== Open detail =====
+  const openContact = useCallback(async (contact) => {
+    setSelectedContact(contact);
+    setShowModal(true);
+    setMenu({ open: false, id: null, top: 0, left: 0 });
+
+    if (contact.status === 'new') {
+      setContacts((prev) =>
+        prev.map((c) => (c._id === contact._id ? { ...c, status: 'read' } : c))
+      );
+      setSelectedContact({ ...contact, status: 'read' });
+      try {
+        await api.put(`/contacts/${contact._id}`, { status: 'read' });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  }, []);
+
+  // ===== Update status =====
+  const updateStatus = useCallback(
+    async (id, newStatus) => {
+      setContacts((prev) =>
+        prev.map((c) => (c._id === id ? { ...c, status: newStatus } : c))
+      );
+      if (selectedContact?._id === id) {
+        setSelectedContact((prev) => ({ ...prev, status: newStatus }));
+      }
+      setMenu({ open: false, id: null, top: 0, left: 0 });
+      try {
+        await api.put(`/contacts/${id}`, { status: newStatus });
+      } catch {
+        alert('Failed to update status');
+        fetchContacts();
+      }
+    },
+    [selectedContact, fetchContacts]
+  );
+
+  // ===== Delete =====
+  const handleDelete = useCallback(
+    async (id) => {
+      if (!window.confirm('Delete this contact message?')) return;
+      const prev = contacts;
+      setContacts((c) => c.filter((x) => x._id !== id));
       setShowModal(false);
-      fetchContacts();
-    } catch (err) {
-      alert('Failed to delete');
-    }
+      setMenu({ open: false, id: null, top: 0, left: 0 });
+      try {
+        await api.delete(`/contacts/${id}`);
+      } catch {
+        alert('Failed to delete');
+        setContacts(prev);
+      }
+    },
+    [contacts]
+  );
+
+  // ===== Time-ago =====
+  const formatDate = (date) => {
+    const d = new Date(date);
+    const now = new Date();
+    const diffMs = now - d;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return d.toLocaleDateString('en-IN', {
+      day: '2-digit', month: 'short', year: 'numeric',
+    });
   };
 
-  // ===== Format Date =====
-  const formatDate = (date) =>
+  const formatFullDate = (date) =>
     new Date(date).toLocaleString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
     });
 
+  const filterChips = useMemo(
+    () => [
+      { key: 'all', label: 'All', count: stats?.total },
+      { key: 'new', label: 'New', count: stats?.new },
+      { key: 'read', label: 'Read', count: stats?.read },
+      { key: 'replied', label: 'Replied', count: stats?.replied },
+      { key: 'closed', label: 'Closed', count: stats?.closed },
+    ],
+    [stats]
+  );
+
+  // ===== Render menu (shared between table & card) =====
+  const renderMenu = (contact) => {
+    if (!menu.open || menu.id !== contact._id) return null;
+    return (
+      <div
+        ref={menuRef}
+        className={styles.menu}
+        style={{ top: menu.top, left: menu.left }}
+      >
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            openContact(contact);
+          }}
+        >
+          <FaEye /> View Details
+        </button>
+        {contact.status !== 'read' && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              updateStatus(contact._id, 'read');
+            }}
+          >
+            <FaEnvelopeOpen /> Mark as Read
+          </button>
+        )}
+        {contact.status !== 'replied' && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              updateStatus(contact._id, 'replied');
+            }}
+          >
+            <FaCheckCircle /> Mark Replied
+          </button>
+        )}
+        {contact.status !== 'closed' && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              updateStatus(contact._id, 'closed');
+            }}
+          >
+            <FaArchive /> Close
+          </button>
+        )}
+        <div className={styles.menuDivider} />
+        <button
+          className={styles.danger}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleDelete(contact._id);
+          }}
+        >
+          <FaTrash /> Delete
+        </button>
+      </div>
+    );
+  };
+
   return (
-    <div>
+    <div className={styles.wrapper}>
       {/* ===== Header ===== */}
-      <div style={{ marginBottom: '25px' }}>
-        <h1
-          style={{
-            color: '#1a237e',
-            fontWeight: 800,
-            fontSize: '26px',
-            margin: 0,
-            marginBottom: '5px',
-          }}
-        >
-          📬 Contact Messages
-        </h1>
-        <p
-          style={{
-            color: '#666',
-            fontWeight: 500,
-            fontSize: '13px',
-            margin: 0,
-          }}
-        >
-          Manage all customer inquiries
-        </p>
+      <div className={styles.header}>
+        <div>
+          <h1 className={styles.title}>Contact Messages</h1>
+          <p className={styles.subtitle}>Manage all customer inquiries</p>
+        </div>
+        {contacts.length > 0 && (
+          <span className={styles.countBadge}>
+            {contacts.length} {contacts.length === 1 ? 'message' : 'messages'}
+          </span>
+        )}
       </div>
 
-      {/* ===== Stats Cards ===== */}
+      {/* ===== Stats ===== */}
       {stats && (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-            gap: '15px',
-            marginBottom: '25px',
-          }}
-        >
-          <StatCard
-            icon={<FaEnvelope />}
-            label="Total"
-            value={stats.total}
-            color="#1a237e"
-            bg="#e8eaf6"
-          />
-          <StatCard
-            icon={<FaClock />}
-            label="New"
-            value={stats.new}
-            color="#f57c00"
-            bg="#fff3e0"
-          />
-          <StatCard
-            icon={<FaEnvelopeOpen />}
-            label="Read"
-            value={stats.read}
-            color="#1976d2"
-            bg="#e3f2fd"
-          />
-          <StatCard
-            icon={<FaReply />}
-            label="Replied"
-            value={stats.replied}
-            color="#2e7d32"
-            bg="#e8f5e9"
-          />
+        <div className={styles.statsGrid}>
+          <StatCard icon={<FaEnvelope />} label="Total" value={stats.total} color="#1a237e" bg="#e8eaf6" />
+          <StatCard icon={<FaClock />} label="New" value={stats.new} color="#f57c00" bg="#fff3e0" />
+          <StatCard icon={<FaEnvelopeOpen />} label="Read" value={stats.read} color="#1976d2" bg="#e3f2fd" />
+          <StatCard icon={<FaReply />} label="Replied" value={stats.replied} color="#2e7d32" bg="#e8f5e9" />
         </div>
       )}
 
       {/* ===== Filters ===== */}
-      <div
-        style={{
-          background: '#fff',
-          padding: '18px',
-          borderRadius: '12px',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
-          marginBottom: '20px',
-          display: 'flex',
-          gap: '12px',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-        }}
-      >
-        {/* Search */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: '#f5f5f5',
-            borderRadius: '8px',
-            padding: '9px 14px',
-            flex: '1 1 250px',
-          }}
-        >
-          <FaSearch style={{ color: '#999', fontSize: '13px' }} />
+      <div className={styles.filters}>
+        <div className={styles.searchWrap}>
+          <FaSearch className={styles.searchIcon} />
           <input
             type="text"
+            inputMode="search"
             placeholder="Search by name, email, subject..."
             value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setPage(1);
-            }}
-            style={{
-              flex: 1,
-              border: 'none',
-              background: 'transparent',
-              outline: 'none',
-              fontSize: '13px',
-              fontWeight: 500,
-              color: '#333',
-            }}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className={styles.searchInput}
           />
+          {fetching && <FaSpinner className={styles.searchSpinner} />}
+          {searchTerm && !fetching && (
+            <button
+              className={styles.clearBtn}
+              onClick={() => setSearchTerm('')}
+              aria-label="Clear search"
+            >
+              <FaTimes />
+            </button>
+          )}
         </div>
 
-        {/* Status Filter Buttons */}
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-          {[
-            { key: 'all', label: 'All' },
-            { key: 'new', label: 'New' },
-            { key: 'read', label: 'Read' },
-            { key: 'replied', label: 'Replied' },
-            { key: 'closed', label: 'Closed' },
-          ].map((f) => (
+        <div className={styles.filterBtns}>
+          {filterChips.map((f) => (
             <button
               key={f.key}
-              onClick={() => {
-                setStatusFilter(f.key);
-                setPage(1);
-              }}
-              style={{
-                padding: '8px 14px',
-                border: `2px solid ${
-                  statusFilter === f.key ? '#1a237e' : '#ddd'
-                }`,
-                background: statusFilter === f.key ? '#1a237e' : '#fff',
-                color: statusFilter === f.key ? '#fff' : '#666',
-                borderRadius: '8px',
-                fontWeight: 700,
-                fontSize: '12px',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-              }}
+              onClick={() => setStatusFilter(f.key)}
+              className={`${styles.filterBtn} ${
+                statusFilter === f.key ? styles.active : ''
+              }`}
             >
               {f.label}
+              {f.count > 0 && (
+                <span className={styles.filterBtnCount}>{f.count}</span>
+              )}
             </button>
           ))}
         </div>
       </div>
 
-      {/* ===== Contacts List ===== */}
+      {/* ===== Content ===== */}
       {loading ? (
-        <div
-          style={{
-            padding: '50px',
-            textAlign: 'center',
-            color: '#666',
-            fontWeight: 600,
-          }}
-        >
-          Loading messages...
-        </div>
+        <SkeletonTable rows={8} />
       ) : error ? (
-        <div
-          style={{
-            background: '#ffebee',
-            color: '#c62828',
-            padding: '15px',
-            borderRadius: '10px',
-            fontWeight: 600,
-          }}
-        >
-          ⚠️ {error}
-        </div>
+        <div className={styles.errorBox}>⚠️ {error}</div>
       ) : contacts.length === 0 ? (
-        <div
-          style={{
-            background: '#fff',
-            padding: '60px 20px',
-            borderRadius: '12px',
-            textAlign: 'center',
-            color: '#666',
-            fontWeight: 500,
-            boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
-          }}
-        >
-          📭 No contact messages yet
+        <div className={styles.emptyBox}>
+          {debouncedSearch
+            ? `No results for "${debouncedSearch}"`
+            : 'No contact messages yet'}
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {contacts.map((contact) => {
-            const statusConfig = statusColors[contact.status] || statusColors.new;
-            const isNew = contact.status === 'new';
-
-            return (
-              <div
-                key={contact._id}
-                onClick={() => openContact(contact)}
-                style={{
-                  background: '#fff',
-                  padding: '18px',
-                  borderRadius: '12px',
-                  boxShadow: isNew
-                    ? '0 4px 16px rgba(245, 124, 0, 0.15)'
-                    : '0 2px 10px rgba(0,0,0,0.05)',
-                  border: isNew
-                    ? '1.5px solid rgba(245, 124, 0, 0.3)'
-                    : '1px solid #f0f0f0',
-                  cursor: 'pointer',
-                  transition: 'all 0.25s ease',
-                  display: 'flex',
-                  gap: '15px',
-                  alignItems: 'flex-start',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = isNew
-                    ? '0 8px 24px rgba(245, 124, 0, 0.2)'
-                    : '0 8px 24px rgba(26, 35, 126, 0.1)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = isNew
-                    ? '0 4px 16px rgba(245, 124, 0, 0.15)'
-                    : '0 2px 10px rgba(0,0,0,0.05)';
-                }}
-              >
-                {/* Avatar */}
-                <div
-                  style={{
-                    width: '46px',
-                    height: '46px',
-                    borderRadius: '12px',
-                    background: `linear-gradient(135deg, ${
-                      isNew ? '#f57c00' : '#1a237e'
-                    } 0%, ${isNew ? '#ef6c00' : '#3949ab'} 100%)`,
-                    color: '#fff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontWeight: 800,
-                    fontSize: '16px',
-                    flexShrink: 0,
-                  }}
-                >
-                  {contact.name?.charAt(0).toUpperCase() || '?'}
-                </div>
-
-                {/* Content */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'flex-start',
-                      gap: '10px',
-                      marginBottom: '6px',
-                      flexWrap: 'wrap',
-                    }}
-                  >
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <h3
-                        style={{
-                          color: '#1a237e',
-                          fontWeight: 800,
-                          fontSize: '15px',
-                          margin: 0,
-                          marginBottom: '3px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          flexWrap: 'wrap',
-                        }}
-                      >
-                        {contact.name}
-                        {isNew && (
-                          <span
-                            style={{
-                              background: '#f57c00',
-                              color: '#fff',
-                              fontSize: '9px',
-                              fontWeight: 800,
-                              padding: '2px 8px',
-                              borderRadius: '10px',
-                              letterSpacing: '0.5px',
-                            }}
-                          >
-                            NEW
-                          </span>
-                        )}
-                      </h3>
-
-                      <div
-                        style={{
-                          display: 'flex',
-                          gap: '14px',
-                          fontSize: '12px',
-                          color: '#666',
-                          fontWeight: 500,
-                          flexWrap: 'wrap',
-                        }}
-                      >
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                          <FaEnvelope style={{ fontSize: '10px' }} />
-                          {contact.email}
-                        </span>
-                        {contact.phone && (
-                          <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            <FaPhone style={{ fontSize: '10px' }} />
-                            {contact.phone}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Status Badge */}
-                    <span
-                      style={{
-                        background: statusConfig.bg,
-                        color: statusConfig.color,
-                        fontSize: '10.5px',
-                        fontWeight: 700,
-                        padding: '4px 10px',
-                        borderRadius: '12px',
-                        letterSpacing: '0.3px',
-                        textTransform: 'uppercase',
-                        flexShrink: 0,
-                      }}
+        <>
+          {/* ============ DESKTOP TABLE ============ */}
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th className={styles.colSender}>Sender</th>
+                  <th className={styles.colContact}>Contact</th>
+                  <th className={styles.colSubject}>Subject</th>
+                  <th className={styles.colPreview}>Message</th>
+                  <th className={styles.colStatus}>Status</th>
+                  <th className={styles.colDate}>Received</th>
+                  <th className={styles.colActions}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {contacts.map((contact) => {
+                  const sc = statusConfig[contact.status] || statusConfig.new;
+                  const isNew = contact.status === 'new';
+                  return (
+                    <tr
+                      key={contact._id}
+                      onClick={() => openContact(contact)}
+                      className={isNew ? styles.rowNew : ''}
                     >
-                      {statusConfig.label}
+                      <td>
+                        <div className={styles.senderCell}>
+                          <div
+                            className={`${styles.avatar} ${
+                              isNew ? styles.avatarNew : styles.avatarRead
+                            }`}
+                          >
+                            {contact.name?.charAt(0).toUpperCase() || '?'}
+                          </div>
+                          <div className={styles.senderInfo}>
+                            <p className={styles.senderName}>
+                              <Highlight text={contact.name} query={debouncedSearch} />
+                            </p>
+                            <p className={styles.senderEmail}>
+                              <Highlight text={contact.email} query={debouncedSearch} />
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td>
+                        <div className={styles.contactCell}>
+                          <span className={styles.contactLine}>
+                            <FaEnvelope /> {contact.email}
+                          </span>
+                          {contact.phone && (
+                            <span className={styles.contactLine}>
+                              <FaPhone /> {contact.phone}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      <td>
+                        <span className={styles.subject}>
+                          <Highlight text={contact.subject} query={debouncedSearch} />
+                        </span>
+                      </td>
+
+                      <td>
+                        <span className={styles.preview}>
+                          <Highlight text={contact.message} query={debouncedSearch} />
+                        </span>
+                      </td>
+
+                      <td>
+                        <span
+                          className={styles.statusBadge}
+                          style={{ background: sc.bg, color: sc.color }}
+                        >
+                          {sc.label}
+                        </span>
+                      </td>
+
+                      <td>
+                        <span className={styles.dateCell}>
+                          {formatDate(contact.createdAt)}
+                        </span>
+                      </td>
+
+                      <td className={styles.colActions}>
+                        <div className={styles.actionsCell}>
+                          <button
+                            className={styles.dotsBtn}
+                            onClick={(e) => openMenuAt(e, contact._id)}
+                            aria-label="Actions"
+                          >
+                            <FaEllipsisV />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* ============ MOBILE CARDS ============ */}
+          <div className={styles.cards}>
+            {contacts.map((contact) => {
+              const sc = statusConfig[contact.status] || statusConfig.new;
+              const isNew = contact.status === 'new';
+              return (
+                <div
+                  key={contact._id}
+                  className={`${styles.card} ${isNew ? styles.cardNew : ''}`}
+                  onClick={() => openContact(contact)}
+                >
+                  {/* Head: avatar + name/email + status */}
+                  <div className={styles.cardHead}>
+                    <div
+                      className={`${styles.cardAvatar} ${
+                        isNew ? styles.avatarNew : styles.avatarRead
+                      }`}
+                    >
+                      {contact.name?.charAt(0).toUpperCase() || '?'}
+                    </div>
+                    <div className={styles.cardHeadInfo}>
+                      <p className={styles.cardName}>{contact.name}</p>
+                      <p className={styles.cardEmail}>{contact.email}</p>
+                    </div>
+                    <span
+                      className={styles.cardStatus}
+                      style={{ background: sc.bg, color: sc.color }}
+                    >
+                      {sc.label}
                     </span>
                   </div>
 
-                  {/* Subject + Message preview */}
-                  <p
-                    style={{
-                      fontSize: '13px',
-                      color: '#1a237e',
-                      fontWeight: 700,
-                      margin: '6px 0 4px 0',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {contact.subject}
-                  </p>
-                  <p
-                    style={{
-                      fontSize: '12.5px',
-                      color: '#888',
-                      fontWeight: 500,
-                      margin: 0,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {contact.message}
-                  </p>
+                  {/* Subject */}
+                  <p className={styles.cardSubject}>{contact.subject}</p>
 
-                  <p
-                    style={{
-                      fontSize: '11px',
-                      color: '#bbb',
-                      fontWeight: 600,
-                      margin: '8px 0 0 0',
-                    }}
-                  >
-                    📅 {formatDate(contact.createdAt)}
-                  </p>
+                  {/* Message preview (2 lines) */}
+                  <p className={styles.cardPreview}>{contact.message}</p>
+
+                  {/* Foot: date + quick actions */}
+                  <div className={styles.cardFoot}>
+                    <span className={styles.cardDate}>
+                      <FaClock /> {formatDate(contact.createdAt)}
+                    </span>
+                    <div className={styles.cardActions}>
+                      <button
+                        className={`${styles.cardIconBtn} ${styles.reply}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.location.href = `mailto:${contact.email}?subject=Re: ${contact.subject}`;
+                          updateStatus(contact._id, 'replied');
+                        }}
+                        aria-label="Reply"
+                      >
+                        <FaReply />
+                      </button>
+                      <button
+                        className={styles.cardIconBtn}
+                        onClick={(e) => openMenuAt(e, contact._id)}
+                        aria-label="More"
+                      >
+                        <FaEllipsisV />
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
 
-          {/* Pagination */}
+          {/* ===== Global Menu Portal ===== */}
+          {menu.open && (
+            <>
+              {contacts.map((c) => renderMenu(c))}
+            </>
+          )}
+
+          {/* ===== Pagination ===== */}
           {totalPages > 1 && (
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                gap: '10px',
-                padding: '20px 0',
-              }}
-            >
+            <div className={styles.pagination}>
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
-                style={paginationBtnStyle(page === 1)}
+                className={styles.pageBtn}
               >
                 ← Prev
               </button>
-              <span style={{ fontWeight: 700, color: '#1a237e', fontSize: '13px' }}>
+              <span className={styles.pageInfo}>
                 Page {page} of {totalPages}
               </span>
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
-                style={paginationBtnStyle(page === totalPages)}
+                className={styles.pageBtn}
               >
                 Next →
               </button>
             </div>
           )}
-        </div>
+        </>
       )}
 
-      {/* ===== Contact Detail Modal ===== */}
+      {/* ===== Modal ===== */}
       {showModal && selectedContact && (
         <div
+          className={styles.modalOverlay}
           onClick={() => setShowModal(false)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.6)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 2000,
-            padding: '20px',
-          }}
         >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: '#fff',
-              borderRadius: '16px',
-              width: '100%',
-              maxWidth: '620px',
-              maxHeight: '90vh',
-              overflowY: 'auto',
-              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-            }}
-          >
-            {/* Header */}
-            <div
-              style={{
-                background: 'linear-gradient(135deg, #1a237e 0%, #3949ab 100%)',
-                padding: '22px 26px',
-                borderRadius: '16px 16px 0 0',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                color: '#fff',
-              }}
-            >
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: '18px',
-                  fontWeight: 800,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                }}
-              >
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h2>
                 <FaEnvelope /> Message Details
               </h2>
               <button
+                className={styles.modalClose}
                 onClick={() => setShowModal(false)}
-                style={{
-                  background: 'rgba(255,255,255,0.15)',
-                  border: 'none',
-                  color: '#fff',
-                  width: '34px',
-                  height: '34px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '14px',
-                }}
+                aria-label="Close"
               >
                 <FaTimes />
               </button>
             </div>
 
-            {/* Body */}
-            <div style={{ padding: '26px' }}>
-              {/* Sender Info */}
-              <div
-                style={{
-                  background: '#f9f9f9',
-                  padding: '18px',
-                  borderRadius: '12px',
-                  marginBottom: '20px',
-                  borderLeft: '4px solid #1a237e',
-                }}
-              >
-                <h3
-                  style={{
-                    color: '#1a237e',
-                    fontSize: '18px',
-                    fontWeight: 800,
-                    margin: '0 0 4px 0',
-                  }}
-                >
-                  {selectedContact.name}
-                </h3>
-                <div
-                  style={{
-                    display: 'flex',
-                    gap: '18px',
-                    fontSize: '13px',
-                    color: '#666',
-                    fontWeight: 500,
-                    flexWrap: 'wrap',
-                    marginTop: '8px',
-                  }}
-                >
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <FaEnvelope style={{ color: '#f57c00' }} />
-                    {selectedContact.email}
+            <div className={styles.modalBody}>
+              <div className={styles.senderBox}>
+                <h3 className={styles.senderName}>{selectedContact.name}</h3>
+                <div className={styles.senderMeta}>
+                  <span>
+                    <FaEnvelope /> {selectedContact.email}
                   </span>
                   {selectedContact.phone && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <FaPhone style={{ color: '#f57c00' }} />
-                      {selectedContact.phone}
+                    <span>
+                      <FaPhone /> {selectedContact.phone}
                     </span>
                   )}
                 </div>
               </div>
 
-              {/* Subject */}
-              <div style={{ marginBottom: '20px' }}>
-                <label
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    color: '#999',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.8px',
-                    display: 'block',
-                    marginBottom: '6px',
-                  }}
-                >
-                  Subject
-                </label>
-                <p
-                  style={{
-                    fontSize: '15px',
-                    color: '#1a237e',
-                    fontWeight: 700,
-                    margin: 0,
-                  }}
-                >
-                  {selectedContact.subject}
-                </p>
+              <div className={styles.section}>
+                <label className={styles.sectionLabel}>Subject</label>
+                <p className={styles.sectionValue}>{selectedContact.subject}</p>
               </div>
 
-              {/* Message */}
-              <div style={{ marginBottom: '22px' }}>
-                <label
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    color: '#999',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.8px',
-                    display: 'block',
-                    marginBottom: '6px',
-                  }}
-                >
-                  Message
-                </label>
-                <p
-                  style={{
-                    fontSize: '14px',
-                    color: '#333',
-                    fontWeight: 500,
-                    lineHeight: 1.7,
-                    margin: 0,
-                    padding: '16px',
-                    background: '#fafafa',
-                    borderRadius: '10px',
-                    border: '1px solid #f0f0f0',
-                    whiteSpace: 'pre-wrap',
-                  }}
-                >
-                  {selectedContact.message}
-                </p>
+              <div className={styles.section}>
+                <label className={styles.sectionLabel}>Message</label>
+                <p className={styles.messageBox}>{selectedContact.message}</p>
               </div>
 
-              {/* Date */}
-              <p
-                style={{
-                  fontSize: '11.5px',
-                  color: '#999',
-                  fontWeight: 600,
-                  margin: '0 0 22px 0',
-                }}
-              >
-                📅 Received: {formatDate(selectedContact.createdAt)}
+              <p className={styles.dateLine}>
+                Received: {formatFullDate(selectedContact.createdAt)}
               </p>
 
-              {/* Action Buttons */}
-              <div
-                style={{
-                  display: 'flex',
-                  gap: '10px',
-                  flexWrap: 'wrap',
-                  paddingTop: '20px',
-                  borderTop: '1px solid #f0f0f0',
-                }}
-              >
+              <div className={styles.modalActions}>
                 <a
                   href={`mailto:${selectedContact.email}?subject=Re: ${selectedContact.subject}`}
-                  style={{
-                    flex: '1 1 140px',
-                    padding: '12px',
-                    background: '#2e7d32',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '10px',
-                    fontWeight: 700,
-                    fontSize: '13px',
-                    textDecoration: 'none',
-                    textAlign: 'center',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                    cursor: 'pointer',
-                  }}
+                  className={styles.btnReply}
                   onClick={() => updateStatus(selectedContact._id, 'replied')}
                 >
-                  <FaReply /> Reply via Email
+                  <FaReply /> Reply
                 </a>
 
                 {selectedContact.status !== 'closed' && (
                   <button
-                    onClick={() =>
-                      updateStatus(selectedContact._id, 'closed')
-                    }
-                    style={{
-                      flex: '1 1 100px',
-                      padding: '12px',
-                      background: '#f5f5f5',
-                      color: '#666',
-                      border: '1px solid #ddd',
-                      borderRadius: '10px',
-                      fontWeight: 700,
-                      fontSize: '13px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px',
-                    }}
+                    onClick={() => updateStatus(selectedContact._id, 'closed')}
+                    className={styles.btnClose}
                   >
                     <FaArchive /> Close
                   </button>
@@ -780,21 +761,8 @@ const ManageContacts = () => {
 
                 <button
                   onClick={() => handleDelete(selectedContact._id)}
-                  style={{
-                    flex: '0 0 auto',
-                    padding: '12px 16px',
-                    background: '#ffebee',
-                    color: '#c62828',
-                    border: 'none',
-                    borderRadius: '10px',
-                    fontWeight: 700,
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                  }}
+                  className={styles.btnDelete}
+                  aria-label="Delete"
                 >
                   <FaTrash />
                 </button>
@@ -809,71 +777,17 @@ const ManageContacts = () => {
 
 // ===== Stat Card =====
 const StatCard = ({ icon, label, value, color, bg }) => (
-  <div
-    style={{
-      background: '#fff',
-      padding: '18px',
-      borderRadius: '12px',
-      boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
-      borderLeft: `4px solid ${color}`,
-      display: 'flex',
-      alignItems: 'center',
-      gap: '14px',
-    }}
-  >
-    <div
-      style={{
-        width: '42px',
-        height: '42px',
-        borderRadius: '10px',
-        background: bg,
-        color: color,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: '17px',
-        flexShrink: 0,
-      }}
-    >
+  <div className={styles.statCard}>
+    <div className={styles.statIcon} style={{ background: bg, color }}>
       {icon}
     </div>
-    <div>
-      <p
-        style={{
-          fontSize: '11px',
-          color: '#999',
-          fontWeight: 700,
-          textTransform: 'uppercase',
-          letterSpacing: '0.5px',
-          margin: 0,
-        }}
-      >
-        {label}
-      </p>
-      <h3
-        style={{
-          fontSize: '22px',
-          color: color,
-          fontWeight: 800,
-          margin: '2px 0 0 0',
-        }}
-      >
+    <div className={styles.statInfo}>
+      <p className={styles.statLabel}>{label}</p>
+      <h3 className={styles.statValue} style={{ color }}>
         {value}
       </h3>
     </div>
   </div>
 );
-
-// ===== Pagination Button Style =====
-const paginationBtnStyle = (disabled) => ({
-  padding: '8px 16px',
-  background: disabled ? '#f5f5f5' : '#1a237e',
-  color: disabled ? '#999' : '#fff',
-  border: 'none',
-  borderRadius: '8px',
-  fontWeight: 700,
-  fontSize: '12px',
-  cursor: disabled ? 'not-allowed' : 'pointer',
-});
 
 export default ManageContacts;

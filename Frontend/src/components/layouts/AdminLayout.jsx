@@ -29,16 +29,37 @@ const AdminLayout = () => {
         const { data } = await api.get('/contacts?status=new&limit=1');
         setUnreadContacts(data.stats?.new || 0);
       } catch (err) {
-        // Silent fail — badge optional hai
+        // Silent fail
       }
     };
 
     fetchUnreadCount();
-
-    // Refresh every 60 seconds
     const interval = setInterval(fetchUnreadCount, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  // ===== Lock body scroll when sidebar open (mobile) =====
+  useEffect(() => {
+    if (sidebarOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [sidebarOpen]);
+
+  // ===== Auto-close sidebar on resize to desktop =====
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth > 992 && sidebarOpen) {
+        setSidebarOpen(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [sidebarOpen]);
 
   const handleLogout = () => {
     const confirmLogout = window.confirm('Are you sure you want to logout?');
@@ -49,46 +70,18 @@ const AdminLayout = () => {
   };
 
   const navItems = [
-    {
-      to: '/admin/dashboard',
-      icon: <FaTachometerAlt />,
-      label: 'Dashboard',
-    },
-    {
-      to: '/admin/billing',
-      icon: <FaCalculator />,
-      label: 'Billing / POS',
-    },
-    {
-      to: '/admin/sales',
-      icon: <FaFileInvoiceDollar />,
-      label: 'Sales History',
-    },
-    {
-      to: '/admin/books',
-      icon: <FaBook />,
-      label: 'Add Books ',
-    },
-    {
-      to: '/admin/banners',
-      icon: <FaImage />,
-      label: 'Website Banners',
-    },
-    {
-      to: '/admin/orders',
-      icon: <FaShoppingBag />,
-      label: 'Manage Orders',
-    },
-    {
-      to: '/admin/users',
-      icon: <FaUsers />,
-      label: ' Registered Users',
-    },
+    { to: '/admin/dashboard', icon: <FaTachometerAlt />, label: 'Dashboard' },
+    { to: '/admin/billing', icon: <FaCalculator />, label: 'Billing / POS' },
+    { to: '/admin/sales', icon: <FaFileInvoiceDollar />, label: 'Sales History' },
+    { to: '/admin/books', icon: <FaBook />, label: 'Add Books' },
+    { to: '/admin/banners', icon: <FaImage />, label: 'Website Banners' },
+    { to: '/admin/orders', icon: <FaShoppingBag />, label: 'Manage Orders' },
+    { to: '/admin/users', icon: <FaUsers />, label: 'Registered Users' },
     {
       to: '/admin/contacts',
       icon: <FaEnvelope />,
       label: 'Contact Messages',
-      badge: unreadContacts > 0 ? unreadContacts : null, // ✅ Badge
+      badge: unreadContacts > 0 ? unreadContacts : null,
     },
   ];
 
@@ -117,8 +110,6 @@ const AdminLayout = () => {
             >
               <span className={styles.navIcon}>{item.icon}</span>
               <span className={styles.navLabel}>{item.label}</span>
-
-              {/* ✅ Badge for unread contacts */}
               {item.badge && (
                 <span className={styles.navBadge}>{item.badge}</span>
               )}
@@ -131,13 +122,23 @@ const AdminLayout = () => {
         </button>
       </aside>
 
+      {/* ===== Overlay (mobile only) ===== */}
+      {sidebarOpen && (
+        <div
+          className={styles.overlay}
+          onClick={() => setSidebarOpen(false)}
+          aria-label="Close sidebar"
+        />
+      )}
+
       {/* ===== Main Content ===== */}
       <div className={styles.main}>
         <header className={styles.topbar}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
             <button
               className={styles.mobileToggle}
               onClick={() => setSidebarOpen(!sidebarOpen)}
+              aria-label="Toggle sidebar"
             >
               <FaBars />
             </button>

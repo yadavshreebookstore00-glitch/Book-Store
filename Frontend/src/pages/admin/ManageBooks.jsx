@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   FaPlus,
   FaEdit,
@@ -7,8 +7,10 @@ import {
   FaSave,
   FaCloudUploadAlt,
   FaSearch,
+  FaBook,
 } from 'react-icons/fa';
 import api from '../../services/api';
+import styles from './ManageBooks.module.css';
 
 const emptyForm = {
   title: '',
@@ -43,6 +45,46 @@ const categories = [
   'Mystery',
 ];
 
+// ===== Highlight helper =====
+const Highlight = ({ text, query }) => {
+  if (!query || !text) return <>{text}</>;
+  const q = query.toLowerCase();
+  const t = String(text);
+  const idx = t.toLowerCase().indexOf(q);
+  if (idx === -1) return <>{t}</>;
+  return (
+    <>
+      {t.slice(0, idx)}
+      <span className={styles.highlight}>{t.slice(idx, idx + q.length)}</span>
+      {t.slice(idx + q.length)}
+    </>
+  );
+};
+
+// ===== Stock helper =====
+const getStockClass = (stock) => {
+  if (stock > 10) return styles.stockIn;
+  if (stock > 0) return styles.stockLow;
+  return styles.stockOut;
+};
+
+// ===== Skeleton =====
+const SkeletonTable = ({ rows = 6 }) => (
+  <div className={styles.skeletonWrap}>
+    {Array.from({ length: rows }).map((_, i) => (
+      <div key={i} className={styles.skeletonRow}>
+        <div className={styles.skThumb} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className={`${styles.skLine} ${styles.skTitle}`} />
+          <div className={`${styles.skLine} ${styles.skSub}`} />
+        </div>
+        <div className={`${styles.skLine} ${styles.skMeta}`} />
+        <div className={`${styles.skLine} ${styles.skMeta}`} />
+      </div>
+    ))}
+  </div>
+);
+
 const ManageBooks = () => {
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -59,8 +101,9 @@ const ManageBooks = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef(null);
+  const scrollYRef = useRef(0);
 
-  // ===== Fetch Books =====
+  // ===== Fetch =====
   const fetchBooks = async () => {
     try {
       setLoading(true);
@@ -77,6 +120,44 @@ const ManageBooks = () => {
     fetchBooks();
   }, []);
 
+  // ===== iOS-safe scroll lock =====
+  useEffect(() => {
+    if (showModal) {
+      scrollYRef.current = window.scrollY;
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollYRef.current}px`;
+      document.body.style.width = '100%';
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+      if (scrollYRef.current) {
+        window.scrollTo(0, scrollYRef.current);
+        scrollYRef.current = 0;
+      }
+    }
+    return () => {
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+    };
+  }, [showModal]);
+
+  // ===== ESC to close =====
+  useEffect(() => {
+    if (!showModal) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape' && !saving && !uploading) closeModal();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showModal, saving, uploading]);
+
+  // ===== Add / Edit / Close =====
   const handleAddClick = () => {
     setEditingBook(null);
     setForm(emptyForm);
@@ -110,6 +191,7 @@ const ManageBooks = () => {
   };
 
   const closeModal = () => {
+    if (saving || uploading) return;
     setShowModal(false);
     setEditingBook(null);
     setForm(emptyForm);
@@ -125,9 +207,9 @@ const ManageBooks = () => {
     }));
   };
 
-  // ===== Image Upload =====
+  // ===== Upload =====
   const handleImageUpload = async (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
@@ -149,10 +231,8 @@ const ManageBooks = () => {
 
       const { data } = await api.post('/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
-        onUploadProgress: (progressEvent) => {
-          const percent = Math.round(
-            (progressEvent.loaded * 100) / progressEvent.total
-          );
+        onUploadProgress: (evt) => {
+          const percent = Math.round((evt.loaded * 100) / evt.total);
           setUploadProgress(percent);
         },
       });
@@ -168,6 +248,7 @@ const ManageBooks = () => {
     } finally {
       setUploading(false);
       setUploadProgress(0);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -181,26 +262,12 @@ const ManageBooks = () => {
     e.preventDefault();
     setFormError('');
 
-    if (!form.title.trim()) {
-      setFormError('Title is required');
-      return;
-    }
-    if (!form.author.trim()) {
-      setFormError('Author is required');
-      return;
-    }
-    if (!form.description.trim()) {
-      setFormError('Description is required');
-      return;
-    }
-    if (!form.price || Number(form.price) <= 0) {
-      setFormError('Valid price is required');
-      return;
-    }
-    if (!form.image) {
-      setFormError('Book image is required');
-      return;
-    }
+    if (!form.title.trim()) return setFormError('Title is required');
+    if (!form.author.trim()) return setFormError('Author is required');
+    if (!form.description.trim()) return setFormError('Description is required');
+    if (!form.price || Number(form.price) <= 0)
+      return setFormError('Valid price is required');
+    if (!form.image) return setFormError('Book image is required');
 
     setSaving(true);
 
@@ -248,6 +315,7 @@ const ManageBooks = () => {
     }
   };
 
+  // ===== Delete =====
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this book?')) return;
     try {
@@ -258,494 +326,578 @@ const ManageBooks = () => {
     }
   };
 
-  const filteredBooks = books.filter(
-    (b) =>
-      b.title?.toLowerCase().includes(search.toLowerCase()) ||
-      b.author?.toLowerCase().includes(search.toLowerCase())
-  );
-
-  if (loading) {
-    return (
-      <div style={{ padding: '50px', textAlign: 'center', fontWeight: 600 }}>
-        Loading books...
-      </div>
+  // ===== Filtered (memoized) =====
+  const filteredBooks = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return books;
+    return books.filter(
+      (b) =>
+        b.title?.toLowerCase().includes(q) ||
+        b.author?.toLowerCase().includes(q)
     );
-  }
+  }, [books, search]);
 
   return (
-    <div className="mb-wrapper">
+    <div className={styles.wrapper}>
       {/* ===== Header ===== */}
-      <div className="mb-header">
-        <h1 className="mb-title">Manage Books ({books.length})</h1>
-        <button onClick={handleAddClick} className="mb-add-btn">
+      <div className={styles.header}>
+        <div className={styles.headerLeft}>
+          <h1 className={styles.title}>
+            Manage Books
+            <span className={styles.countPill}>{books.length}</span>
+          </h1>
+          <p className={styles.subtitle}>
+            Add, edit and manage your book inventory
+          </p>
+        </div>
+        <button className={styles.addBtn} onClick={handleAddClick}>
           <FaPlus /> Add New Book
         </button>
       </div>
 
-      {/* ===== Search ===== */}
-      <div className="mb-search-wrap">
-        <FaSearch className="mb-search-icon" />
-        <input
-          type="text"
-          placeholder="Search by title or author..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="mb-search"
-        />
+      {/* ===== Filters ===== */}
+      <div className={styles.filters}>
+        <div className={styles.searchWrap}>
+          <FaSearch className={styles.searchIcon} />
+          <input
+            type="text"
+            inputMode="search"
+            placeholder="Search by title or author..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className={styles.searchInput}
+          />
+          {search && (
+            <button
+              className={styles.clearBtn}
+              onClick={() => setSearch('')}
+              aria-label="Clear search"
+            >
+              <FaTimes />
+            </button>
+          )}
+        </div>
       </div>
 
-      {error && <div className="mb-error">⚠️ {error}</div>}
+      {error && <div className={styles.errorBox}>⚠️ {error}</div>}
 
       {/* ===== Content ===== */}
-      <div className="mb-table-wrap">
-        {filteredBooks.length === 0 ? (
-          <div className="mb-empty">
-            {search ? 'No books match your search.' : '📚 No books added yet.'}
+      {loading ? (
+        <SkeletonTable rows={6} />
+      ) : filteredBooks.length === 0 ? (
+        <div className={styles.empty}>
+          <div className={styles.emptyIcon}>
+            <FaBook />
           </div>
-        ) : (
-          <>
-            {/* ===== Desktop: Table ===== */}
-            <div className="mb-table-desktop">
-              <table className="mb-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Image</th>
-                    <th>Title</th>
-                    <th>Author</th>
-                    <th>Category</th>
-                    <th>Price</th>
-                    <th>Stock</th>
-                    <th>Rating</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredBooks.map((b, i) => (
-                    <tr key={b._id}>
-                      <td>{i + 1}</td>
-                      <td>
-                        <img
-                          src={b.image}
-                          alt={b.title}
-                          className="mb-thumb"
-                          onError={(e) => {
-                            e.target.src =
-                              'https://via.placeholder.com/45x60?text=Book';
-                          }}
-                        />
-                      </td>
-                      <td className="mb-cell-title">
-                        {b.title}
-                        {b.isBestSeller && (
-                          <span className="mb-badge-best">BEST</span>
-                        )}
-                      </td>
-                      <td>{b.author}</td>
-                      <td>
-                        <span className="mb-badge-cat">{b.category}</span>
-                      </td>
-                      <td className="mb-price">₹{b.price}</td>
-                      <td>
-                        <span
-                          className={`mb-stock ${
-                            b.stock > 10
-                              ? 'in'
-                              : b.stock > 0
-                              ? 'low'
-                              : 'out'
-                          }`}
-                        >
-                          {b.stock}
+          <p className={styles.emptyTitle}>
+            {search ? 'No books found' : 'No books added yet'}
+          </p>
+          <p className={styles.emptyText}>
+            {search
+              ? `No results for "${search}"`
+              : 'Add your first book to get started'}
+          </p>
+          {!search && (
+            <button className={styles.addBtn} onClick={handleAddClick}>
+              <FaPlus /> Add Book
+            </button>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* ===== DESKTOP TABLE ===== */}
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th className={styles.colIdx}>#</th>
+                  <th className={styles.colImg}></th>
+                  <th className={styles.colTitle}>Title</th>
+                  <th className={styles.colAuthor}>Author</th>
+                  <th className={styles.colCat}>Category</th>
+                  <th className={styles.colPrice}>Price</th>
+                  <th className={styles.colStock}>Stock</th>
+                  <th className={styles.colRating}>Rating</th>
+                  <th className={styles.colActions}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredBooks.map((b, i) => (
+                  <tr key={b._id}>
+                    <td className={styles.colIdx}>{i + 1}</td>
+                    <td className={styles.colImg}>
+                      <img
+                        src={b.image}
+                        alt={b.title}
+                        className={styles.thumb}
+                        loading="lazy"
+                        onError={(e) => {
+                          e.target.style.visibility = 'hidden';
+                        }}
+                      />
+                    </td>
+                    <td>
+                      <div className={styles.titleCell}>
+                        <span className={styles.titleText}>
+                          <Highlight text={b.title} query={search} />
                         </span>
-                      </td>
-                      <td>⭐ {b.rating?.toFixed(1) || '0.0'}</td>
-                      <td>
-                        <div className="mb-actions">
-                          <button
-                            onClick={() => handleEditClick(b)}
-                            className="mb-btn-edit"
-                          >
-                            <FaEdit /> Edit
-                          </button>
-                          <button
-                            onClick={() => handleDelete(b._id)}
-                            className="mb-btn-delete"
-                          >
-                            <FaTrash /> Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* ===== Mobile: Cards ===== */}
-            <div className="mb-cards-mobile">
-              {filteredBooks.map((b, i) => (
-                <div key={b._id} className="mb-card">
-                  <div className="mb-card-top">
-                    <img
-                      src={b.image}
-                      alt={b.title}
-                      className="mb-card-img"
-                      onError={(e) => {
-                        e.target.src =
-                          'https://via.placeholder.com/60x80?text=Book';
-                      }}
-                    />
-                    <div className="mb-card-info">
-                      <h3 className="mb-card-title">
-                        {b.title}
                         {b.isBestSeller && (
-                          <span className="mb-badge-best">BEST</span>
+                          <span className={styles.badgeBest}>Best</span>
                         )}
-                      </h3>
-                      <p className="mb-card-author">{b.author}</p>
-                      <div className="mb-card-tags">
-                        <span className="mb-badge-cat">{b.category}</span>
-                        <span
-                          className={`mb-stock ${
-                            b.stock > 10
-                              ? 'in'
-                              : b.stock > 0
-                              ? 'low'
-                              : 'out'
-                          }`}
-                        >
-                          Stock: {b.stock}
-                        </span>
+                        {b.isFeatured && (
+                          <span className={styles.badgeFeatured}>Feat</span>
+                        )}
                       </div>
-                    </div>
-                  </div>
-
-                  <div className="mb-card-meta">
-                    <div className="mb-card-meta-item">
-                      <span className="mb-card-meta-label">Price</span>
-                      <span className="mb-card-meta-value price">
-                        ₹{b.price}
+                    </td>
+                    <td>
+                      <span className={styles.authorCell}>
+                        <Highlight text={b.author} query={search} />
                       </span>
-                    </div>
-                    <div className="mb-card-meta-item">
-                      <span className="mb-card-meta-label">Rating</span>
-                      <span className="mb-card-meta-value">
-                        ⭐ {b.rating?.toFixed(1) || '0.0'}
+                    </td>
+                    <td>
+                      <span className={styles.badgeCat}>{b.category}</span>
+                    </td>
+                    <td>
+                      <span className={styles.price}>₹{b.price}</span>
+                      {b.originalPrice > b.price && (
+                        <span className={styles.priceStrike}>
+                          ₹{b.originalPrice}
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      <span
+                        className={`${styles.stockPill} ${getStockClass(
+                          b.stock
+                        )}`}
+                      >
+                        {b.stock}
                       </span>
-                    </div>
-                  </div>
+                    </td>
+                    <td>
+                      <span className={styles.rating}>
+                        <span className={styles.ratingStar}>★</span>
+                        {b.rating?.toFixed(1) || '0.0'}
+                      </span>
+                    </td>
+                    <td>
+                      <div className={styles.actions}>
+                        <button
+                          className={`${styles.iconBtn} ${styles.edit}`}
+                          onClick={() => handleEditClick(b)}
+                          title="Edit"
+                        >
+                          <FaEdit />
+                        </button>
+                        <button
+                          className={`${styles.iconBtn} ${styles.delete}`}
+                          onClick={() => handleDelete(b._id)}
+                          title="Delete"
+                        >
+                          <FaTrash />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-                  <div className="mb-card-actions">
-                    <button
-                      onClick={() => handleEditClick(b)}
-                      className="mb-btn-edit"
-                    >
-                      <FaEdit /> Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(b._id)}
-                      className="mb-btn-delete"
-                    >
-                      <FaTrash /> Delete
-                    </button>
+          {/* ===== MOBILE CARDS ===== */}
+          <div className={styles.cards}>
+            {filteredBooks.map((b) => (
+              <div key={b._id} className={styles.card}>
+                <div className={styles.cardTop}>
+                  <img
+                    src={b.image}
+                    alt={b.title}
+                    className={styles.cardImg}
+                    loading="lazy"
+                    onError={(e) => {
+                      e.target.style.visibility = 'hidden';
+                    }}
+                  />
+                  <div className={styles.cardInfo}>
+                    <h3 className={styles.cardTitle}>
+                      <Highlight text={b.title} query={search} />
+                    </h3>
+                    <p className={styles.cardAuthor}>
+                      by <Highlight text={b.author} query={search} />
+                    </p>
+                    <div className={styles.cardTags}>
+                      <span className={styles.badgeCat}>{b.category}</span>
+                      {b.isBestSeller && (
+                        <span className={styles.badgeBest}>Best</span>
+                      )}
+                      {b.isFeatured && (
+                        <span className={styles.badgeFeatured}>Feat</span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
 
-      {/* ===== Modal ===== */}
+                <div className={styles.cardMeta}>
+                  <div className={styles.cardMetaLeft}>
+                    <div className={styles.metaItem}>
+                      <span className={styles.metaLabel}>Price</span>
+                      <span className={`${styles.metaValue} ${styles.price}`}>
+                        ₹{b.price}
+                        {b.originalPrice > b.price && (
+                          <span className={styles.priceStrike}>
+                            ₹{b.originalPrice}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    <div className={styles.metaItem}>
+                      <span className={styles.metaLabel}>Rating</span>
+                      <span className={styles.metaValue}>
+                        <span className={styles.ratingStar}>★</span>{' '}
+                        {b.rating?.toFixed(1) || '0.0'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className={styles.cardMetaRight}>
+                    <span
+                      className={`${styles.stockPill} ${getStockClass(
+                        b.stock
+                      )}`}
+                    >
+                      {b.stock} in stock
+                    </span>
+                  </div>
+                </div>
+
+                <div className={styles.cardActions}>
+                  <button
+                    className={`${styles.iconBtn} ${styles.edit}`}
+                    onClick={() => handleEditClick(b)}
+                  >
+                    <FaEdit /> Edit
+                  </button>
+                  <button
+                    className={`${styles.iconBtn} ${styles.delete}`}
+                    onClick={() => handleDelete(b._id)}
+                  >
+                    <FaTrash /> Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* ===== MODAL ===== */}
       {showModal && (
-        <div className="mb-modal-overlay" onClick={closeModal}>
-          <div className="mb-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-modal-header">
-              <h2 className="mb-modal-title">
+        <div className={styles.modalOverlay} onClick={closeModal}>
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h2 className={styles.modalTitle}>
                 {editingBook ? '✏️ Edit Book' : '➕ Add New Book'}
               </h2>
-              <button onClick={closeModal} className="mb-modal-close">
+              <button
+                className={styles.modalClose}
+                onClick={closeModal}
+                disabled={saving || uploading}
+                aria-label="Close"
+              >
                 <FaTimes />
               </button>
             </div>
 
-            {formError && <div className="mb-form-error">⚠️ {formError}</div>}
+            <form onSubmit={handleSubmit} style={{ display: 'contents' }}>
+              <div className={styles.modalBody}>
+                {formError && (
+                  <div className={styles.formError}>⚠️ {formError}</div>
+                )}
 
-            <form onSubmit={handleSubmit} className="mb-form">
-              <div className="mb-form-group">
-                <label className="mb-label">Title *</label>
-                <input
-                  type="text"
-                  name="title"
-                  value={form.title}
-                  onChange={handleChange}
-                  placeholder="e.g., Atomic Habits"
-                  className="mb-input"
-                  required
-                />
-              </div>
+                {/* Title */}
+                <div className={styles.field}>
+                  <label className={styles.label}>Title *</label>
+                  <input
+                    type="text"
+                    name="title"
+                    value={form.title}
+                    onChange={handleChange}
+                    placeholder="e.g., Atomic Habits"
+                    className={styles.input}
+                    required
+                  />
+                </div>
 
-              <div className="mb-form-group">
-                <label className="mb-label">Author *</label>
-                <input
-                  type="text"
-                  name="author"
-                  value={form.author}
-                  onChange={handleChange}
-                  placeholder="e.g., James Clear"
-                  className="mb-input"
-                  required
-                />
-              </div>
+                {/* Author */}
+                <div className={styles.field}>
+                  <label className={styles.label}>Author *</label>
+                  <input
+                    type="text"
+                    name="author"
+                    value={form.author}
+                    onChange={handleChange}
+                    placeholder="e.g., James Clear"
+                    className={styles.input}
+                    required
+                  />
+                </div>
 
-              <div className="mb-form-group">
-                <label className="mb-label">Description *</label>
-                <textarea
-                  name="description"
-                  value={form.description}
-                  onChange={handleChange}
-                  placeholder="Short description..."
-                  rows="3"
-                  className="mb-textarea"
-                  required
-                />
-              </div>
+                {/* Description */}
+                <div className={styles.field}>
+                  <label className={styles.label}>Description *</label>
+                  <textarea
+                    name="description"
+                    value={form.description}
+                    onChange={handleChange}
+                    placeholder="Short description..."
+                    rows="3"
+                    className={styles.textarea}
+                    required
+                  />
+                </div>
 
-              {/* Image Upload */}
-              <div className="mb-form-group">
-                <label className="mb-label">Book Image *</label>
+                {/* Image */}
+                <div className={styles.field}>
+                  <label className={styles.label}>Book Image *</label>
 
-                {!form.image ? (
-                  <div
-                    onClick={() => !uploading && fileInputRef.current?.click()}
-                    className={`mb-upload-box ${uploading ? 'uploading' : ''}`}
-                  >
-                    {uploading ? (
-                      <div>
-                        <FaCloudUploadAlt className="mb-upload-icon uploading-icon" />
-                        <p className="mb-upload-text">
-                          Uploading... {uploadProgress}%
-                        </p>
-                        <div className="mb-progress-bar">
-                          <div
-                            className="mb-progress-fill"
-                            style={{ width: `${uploadProgress}%` }}
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <FaCloudUploadAlt className="mb-upload-icon" />
-                        <p className="mb-upload-text">Click to upload image</p>
-                        <p className="mb-upload-hint">
-                          JPG, PNG, WEBP • Max 5MB
-                        </p>
-                      </>
-                    )}
-                  </div>
-                ) : (
-                  <div className="mb-image-preview">
-                    <img src={form.image} alt="Uploaded" />
-                    <div className="mb-image-info">
-                      <p className="mb-image-success">✅ Image uploaded</p>
-                      <div className="mb-image-actions">
+                  {!form.image ? (
+                    <div
+                      className={`${styles.uploadBox} ${
+                        uploading ? styles.uploadBoxDisabled : ''
+                      }`}
+                      onClick={() =>
+                        !uploading && fileInputRef.current?.click()
+                      }
+                    >
+                      {uploading ? (
+                        <>
+                          <FaCloudUploadAlt className={styles.uploadIcon} />
+                          <p className={styles.uploadTitle}>
+                            Uploading... {uploadProgress}%
+                          </p>
+                          <div className={styles.progressBar}>
+                            <div
+                              className={styles.progressFill}
+                              style={{ width: `${uploadProgress}%` }}
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <FaCloudUploadAlt className={styles.uploadIcon} />
+                          <p className={styles.uploadTitle}>
+                            Click to upload image
+                          </p>
+                          <p className={styles.uploadHint}>
+                            JPG, PNG, WEBP • Max 5MB
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <div className={styles.previewWrap}>
+                      <img
+                        src={form.image}
+                        alt="Preview"
+                        className={styles.previewImg}
+                      />
+                      <div className={styles.previewActions}>
                         <button
                           type="button"
+                          className={`${styles.previewBtn} ${styles.change}`}
                           onClick={() => fileInputRef.current?.click()}
-                          className="mb-btn-change"
                         >
                           Change
                         </button>
                         <button
                           type="button"
+                          className={`${styles.previewBtn} ${styles.remove}`}
                           onClick={handleRemoveImage}
-                          className="mb-btn-remove"
                         >
                           Remove
                         </button>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/jpg,image/png,image/webp"
-                  onChange={handleImageUpload}
-                  style={{ display: 'none' }}
-                />
-              </div>
-
-              {/* Category + Language */}
-              <div className="mb-form-row">
-                <div className="mb-form-group">
-                  <label className="mb-label">Category *</label>
-                  <select
-                    name="category"
-                    value={form.category}
-                    onChange={handleChange}
-                    className="mb-input"
-                  >
-                    {categories.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png,image/webp"
+                    onChange={handleImageUpload}
+                    style={{ display: 'none' }}
+                  />
                 </div>
-                <div className="mb-form-group">
-                  <label className="mb-label">Language</label>
+
+                {/* Category + Language */}
+                <div className={styles.row2}>
+                  <div className={styles.field}>
+                    <label className={styles.label}>Category *</label>
+                    <select
+                      name="category"
+                      value={form.category}
+                      onChange={handleChange}
+                      className={styles.input}
+                    >
+                      {categories.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className={styles.field}>
+                    <label className={styles.label}>Language</label>
+                    <input
+                      type="text"
+                      name="language"
+                      value={form.language}
+                      onChange={handleChange}
+                      placeholder="English"
+                      className={styles.input}
+                    />
+                  </div>
+                </div>
+
+                {/* Price */}
+                <div className={styles.row2}>
+                  <div className={styles.field}>
+                    <label className={styles.label}>Selling Price (₹) *</label>
+                    <input
+                      type="number"
+                      name="price"
+                      value={form.price}
+                      onChange={handleChange}
+                      placeholder="399"
+                      min="0"
+                      step="0.01"
+                      className={styles.input}
+                      required
+                    />
+                  </div>
+                  <div className={styles.field}>
+                    <label className={styles.label}>Original Price (₹)</label>
+                    <input
+                      type="number"
+                      name="originalPrice"
+                      value={form.originalPrice}
+                      onChange={handleChange}
+                      placeholder="599"
+                      min="0"
+                      className={styles.input}
+                    />
+                  </div>
+                </div>
+
+                {/* Stock + Pages */}
+                <div className={styles.row2}>
+                  <div className={styles.field}>
+                    <label className={styles.label}>Stock *</label>
+                    <input
+                      type="number"
+                      name="stock"
+                      value={form.stock}
+                      onChange={handleChange}
+                      placeholder="10"
+                      min="0"
+                      className={styles.input}
+                      required
+                    />
+                  </div>
+                  <div className={styles.field}>
+                    <label className={styles.label}>Pages</label>
+                    <input
+                      type="number"
+                      name="pages"
+                      value={form.pages}
+                      onChange={handleChange}
+                      placeholder="320"
+                      min="0"
+                      className={styles.input}
+                    />
+                  </div>
+                </div>
+
+                {/* Rating + Reviews */}
+                <div className={styles.row2}>
+                  <div className={styles.field}>
+                    <label className={styles.label}>Rating (0-5) *</label>
+                    <input
+                      type="number"
+                      name="rating"
+                      value={form.rating}
+                      onChange={handleChange}
+                      placeholder="4.5"
+                      min="0"
+                      max="5"
+                      step="0.1"
+                      className={styles.input}
+                      required
+                    />
+                  </div>
+                  <div className={styles.field}>
+                    <label className={styles.label}>Reviews Count</label>
+                    <input
+                      type="number"
+                      name="numReviews"
+                      value={form.numReviews}
+                      onChange={handleChange}
+                      placeholder="0"
+                      min="0"
+                      className={styles.input}
+                    />
+                  </div>
+                </div>
+
+                {/* Publisher */}
+                <div className={styles.field}>
+                  <label className={styles.label}>Publisher</label>
                   <input
                     type="text"
-                    name="language"
-                    value={form.language}
+                    name="publisher"
+                    value={form.publisher}
                     onChange={handleChange}
-                    placeholder="English"
-                    className="mb-input"
+                    placeholder="e.g., Penguin"
+                    className={styles.input}
                   />
+                </div>
+
+                {/* Checkboxes */}
+                <div className={styles.checkRow}>
+                  <label className={styles.checkItem}>
+                    <input
+                      type="checkbox"
+                      name="isFeatured"
+                      checked={form.isFeatured}
+                      onChange={handleChange}
+                    />
+                    <span>⭐ Featured</span>
+                  </label>
+                  <label className={styles.checkItem}>
+                    <input
+                      type="checkbox"
+                      name="isBestSeller"
+                      checked={form.isBestSeller}
+                      onChange={handleChange}
+                    />
+                    <span>🔥 Best Seller</span>
+                  </label>
                 </div>
               </div>
 
-              {/* Price */}
-              <div className="mb-form-row">
-                <div className="mb-form-group">
-                  <label className="mb-label">Selling Price (₹) *</label>
-                  <input
-                    type="number"
-                    name="price"
-                    value={form.price}
-                    onChange={handleChange}
-                    placeholder="399"
-                    min="0"
-                    step="0.01"
-                    className="mb-input"
-                    required
-                  />
-                </div>
-                <div className="mb-form-group">
-                  <label className="mb-label">Original Price (₹)</label>
-                  <input
-                    type="number"
-                    name="originalPrice"
-                    value={form.originalPrice}
-                    onChange={handleChange}
-                    placeholder="599"
-                    min="0"
-                    className="mb-input"
-                  />
-                </div>
-              </div>
-
-              {/* Stock + Pages */}
-              <div className="mb-form-row">
-                <div className="mb-form-group">
-                  <label className="mb-label">Stock *</label>
-                  <input
-                    type="number"
-                    name="stock"
-                    value={form.stock}
-                    onChange={handleChange}
-                    placeholder="10"
-                    min="0"
-                    className="mb-input"
-                    required
-                  />
-                </div>
-                <div className="mb-form-group">
-                  <label className="mb-label">Pages</label>
-                  <input
-                    type="number"
-                    name="pages"
-                    value={form.pages}
-                    onChange={handleChange}
-                    placeholder="320"
-                    min="0"
-                    className="mb-input"
-                  />
-                </div>
-              </div>
-
-              {/* Rating + Reviews */}
-              <div className="mb-form-row">
-                <div className="mb-form-group">
-                  <label className="mb-label">⭐ Rating (0-5) *</label>
-                  <input
-                    type="number"
-                    name="rating"
-                    value={form.rating}
-                    onChange={handleChange}
-                    placeholder="4.5"
-                    min="0"
-                    max="5"
-                    step="0.1"
-                    className="mb-input"
-                    required
-                  />
-                </div>
-                <div className="mb-form-group">
-                  <label className="mb-label">Reviews Count</label>
-                  <input
-                    type="number"
-                    name="numReviews"
-                    value={form.numReviews}
-                    onChange={handleChange}
-                    placeholder="0"
-                    min="0"
-                    className="mb-input"
-                  />
-                </div>
-              </div>
-
-              <div className="mb-form-group">
-                <label className="mb-label">Publisher</label>
-                <input
-                  type="text"
-                  name="publisher"
-                  value={form.publisher}
-                  onChange={handleChange}
-                  placeholder="e.g., Penguin"
-                  className="mb-input"
-                />
-              </div>
-
-              {/* Checkboxes */}
-              <div className="mb-checkbox-row">
-                <label className="mb-checkbox-label">
-                  <input
-                    type="checkbox"
-                    name="isFeatured"
-                    checked={form.isFeatured}
-                    onChange={handleChange}
-                  />
-                  ⭐ Featured
-                </label>
-                <label className="mb-checkbox-label">
-                  <input
-                    type="checkbox"
-                    name="isBestSeller"
-                    checked={form.isBestSeller}
-                    onChange={handleChange}
-                  />
-                  🔥 Best Seller
-                </label>
-              </div>
-
-              {/* Submit */}
-              <div className="mb-form-footer">
+              {/* Footer */}
+              <div className={styles.modalFooter}>
                 <button
                   type="button"
+                  className={styles.cancelBtn}
                   onClick={closeModal}
                   disabled={saving || uploading}
-                  className="mb-btn-cancel"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
+                  className={styles.saveBtn}
                   disabled={saving || uploading}
-                  className="mb-btn-save"
                 >
                   <FaSave />
                   {saving
@@ -761,841 +913,6 @@ const ManageBooks = () => {
           </div>
         </div>
       )}
-
-      {/* ============================================================
-          CSS
-          ============================================================ */}
-      <style>{`
-        /* ================= WRAPPER ================= */
-        .mb-wrapper {
-          padding: 24px;
-          width: 100%;
-          box-sizing: border-box;
-        }
-
-        /* ================= HEADER ================= */
-        .mb-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 15px;
-          margin-bottom: 20px;
-          flex-wrap: wrap;
-        }
-
-        .mb-title {
-          color: #1a237e;
-          font-weight: 800;
-          font-size: 24px;
-          margin: 0;
-        }
-
-        .mb-add-btn {
-          background: #f57c00;
-          color: #fff;
-          border: none;
-          padding: 11px 20px;
-          border-radius: 8px;
-          font-weight: 700;
-          font-size: 14px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          transition: all 0.25s ease;
-          font-family: inherit;
-        }
-
-        .mb-add-btn:hover {
-          background: #ef6c00;
-          transform: translateY(-2px);
-          box-shadow: 0 8px 20px rgba(245, 124, 0, 0.35);
-        }
-
-        /* ================= SEARCH ================= */
-        .mb-search-wrap {
-          position: relative;
-          max-width: 400px;
-          margin-bottom: 20px;
-        }
-
-        .mb-search-icon {
-          position: absolute;
-          left: 14px;
-          top: 50%;
-          transform: translateY(-50%);
-          color: #999;
-          font-size: 13px;
-          pointer-events: none;
-        }
-
-        .mb-search {
-          width: 100%;
-          padding: 11px 14px 11px 38px;
-          border: 1.5px solid #ddd;
-          border-radius: 8px;
-          font-size: 14px;
-          font-weight: 500;
-          outline: none;
-          font-family: inherit;
-          background: #fff;
-          transition: all 0.2s ease;
-          box-sizing: border-box;
-        }
-
-        .mb-search:focus {
-          border-color: #1a237e;
-          box-shadow: 0 0 0 3px rgba(26, 35, 126, 0.08);
-        }
-
-        .mb-error {
-          background: #ffebee;
-          color: #c62828;
-          padding: 12px;
-          border-radius: 8px;
-          font-weight: 600;
-          margin-bottom: 15px;
-          font-size: 13px;
-        }
-
-        /* ================= TABLE WRAPPER ================= */
-        .mb-table-wrap {
-          background: #fff;
-          border-radius: 12px;
-          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-          overflow: hidden;
-        }
-
-        .mb-empty {
-          padding: 50px 20px;
-          text-align: center;
-          color: #666;
-          font-weight: 500;
-        }
-
-        /* ================= DESKTOP TABLE ================= */
-        .mb-table-desktop {
-          display: block;
-          overflow-x: auto;
-        }
-
-        .mb-table {
-          width: 100%;
-          border-collapse: collapse;
-        }
-
-        .mb-table thead tr {
-          background: #f5f5f5;
-        }
-
-        .mb-table th {
-          padding: 14px 16px;
-          text-align: left;
-          font-size: 12px;
-          font-weight: 700;
-          color: #1a237e;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          white-space: nowrap;
-        }
-
-        .mb-table td {
-          padding: 14px 16px;
-          font-size: 13.5px;
-          font-weight: 500;
-          color: #333;
-          vertical-align: middle;
-          border-bottom: 1px solid #f0f0f0;
-        }
-
-        .mb-table tbody tr:hover {
-          background: #fafafa;
-        }
-
-        .mb-thumb {
-          width: 45px;
-          height: 60px;
-          object-fit: cover;
-          border-radius: 6px;
-        }
-
-        .mb-cell-title {
-          font-weight: 700;
-          color: #1a237e;
-        }
-
-        .mb-price {
-          font-weight: 700;
-          color: #f57c00;
-        }
-
-        .mb-badge-best {
-          margin-left: 8px;
-          background: #fff3e0;
-          color: #f57c00;
-          padding: 2px 8px;
-          border-radius: 10px;
-          font-size: 10px;
-          font-weight: 800;
-          letter-spacing: 0.3px;
-        }
-
-        .mb-badge-cat {
-          background: #e8eaf6;
-          color: #1a237e;
-          padding: 3px 10px;
-          border-radius: 12px;
-          font-size: 11.5px;
-          font-weight: 700;
-          white-space: nowrap;
-        }
-
-        .mb-stock {
-          font-weight: 800;
-          font-size: 13px;
-        }
-
-        .mb-stock.in { color: #2e7d32; }
-        .mb-stock.low { color: #f57c00; }
-        .mb-stock.out { color: #c62828; }
-
-        .mb-actions {
-          display: flex;
-          gap: 8px;
-        }
-
-        .mb-btn-edit,
-        .mb-btn-delete {
-          border: none;
-          padding: 7px 12px;
-          border-radius: 6px;
-          cursor: pointer;
-          font-weight: 700;
-          font-size: 12px;
-          display: flex;
-          align-items: center;
-          gap: 5px;
-          font-family: inherit;
-          transition: all 0.2s ease;
-          white-space: nowrap;
-        }
-
-        .mb-btn-edit {
-          background: #e3f2fd;
-          color: #1976d2;
-        }
-
-        .mb-btn-edit:hover {
-          background: #1976d2;
-          color: #fff;
-        }
-
-        .mb-btn-delete {
-          background: #ffebee;
-          color: #c62828;
-        }
-
-        .mb-btn-delete:hover {
-          background: #c62828;
-          color: #fff;
-        }
-
-        /* ================= MOBILE CARDS ================= */
-        .mb-cards-mobile {
-          display: none;
-        }
-
-        .mb-card {
-          background: #fff;
-          padding: 14px;
-          border-bottom: 1px solid #f0f0f0;
-          transition: background 0.2s;
-        }
-
-        .mb-card:last-child {
-          border-bottom: none;
-        }
-
-        .mb-card:hover {
-          background: #fafafa;
-        }
-
-        .mb-card-top {
-          display: flex;
-          gap: 12px;
-          margin-bottom: 12px;
-        }
-
-        .mb-card-img {
-          width: 60px;
-          height: 80px;
-          object-fit: cover;
-          border-radius: 8px;
-          flex-shrink: 0;
-          box-shadow: 2px 4px 10px rgba(26, 35, 126, 0.15);
-        }
-
-        .mb-card-info {
-          flex: 1;
-          min-width: 0;
-        }
-
-        .mb-card-title {
-          font-size: 14.5px;
-          font-weight: 700;
-          color: #1a237e;
-          margin: 0 0 4px 0;
-          line-height: 1.3;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-        }
-
-        .mb-card-author {
-          font-size: 12.5px;
-          color: #666;
-          font-weight: 500;
-          margin: 0 0 8px 0;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-
-        .mb-card-tags {
-          display: flex;
-          gap: 8px;
-          flex-wrap: wrap;
-          align-items: center;
-        }
-
-        .mb-card-tags .mb-badge-cat {
-          font-size: 10.5px;
-          padding: 2px 8px;
-        }
-
-        .mb-card-tags .mb-stock {
-          font-size: 11px;
-          padding: 2px 8px;
-          border-radius: 10px;
-          background: #f5f5f5;
-        }
-
-        .mb-card-tags .mb-stock.in { background: #e8f5e9; }
-        .mb-card-tags .mb-stock.low { background: #fff3e0; }
-        .mb-card-tags .mb-stock.out { background: #ffebee; }
-
-        .mb-card-meta {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 10px;
-          padding: 10px 0;
-          border-top: 1px solid #f5f5f5;
-          border-bottom: 1px solid #f5f5f5;
-          margin-bottom: 12px;
-        }
-
-        .mb-card-meta-item {
-          display: flex;
-          flex-direction: column;
-          gap: 3px;
-        }
-
-        .mb-card-meta-label {
-          font-size: 10px;
-          font-weight: 800;
-          color: #999;
-          text-transform: uppercase;
-          letter-spacing: 0.6px;
-        }
-
-        .mb-card-meta-value {
-          font-size: 14px;
-          font-weight: 800;
-          color: #1a237e;
-        }
-
-        .mb-card-meta-value.price {
-          color: #f57c00;
-          font-size: 16px;
-        }
-
-        .mb-card-actions {
-          display: flex;
-          gap: 8px;
-        }
-
-        .mb-card-actions .mb-btn-edit,
-        .mb-card-actions .mb-btn-delete {
-          flex: 1;
-          justify-content: center;
-          padding: 10px;
-          font-size: 13px;
-        }
-
-        /* ================= MODAL ================= */
-        .mb-modal-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(0, 0, 0, 0.55);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 1000;
-          padding: 16px;
-          overflow-y: auto;
-        }
-
-        .mb-modal {
-          background: #fff;
-          border-radius: 16px;
-          width: 100%;
-          max-width: 640px;
-          max-height: 92vh;
-          overflow-y: auto;
-          padding: 26px;
-          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
-          animation: mbModalIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        @keyframes mbModalIn {
-          from {
-            opacity: 0;
-            transform: translateY(20px) scale(0.98);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-
-        .mb-modal-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 22px;
-          gap: 10px;
-        }
-
-        .mb-modal-title {
-          color: #1a237e;
-          font-weight: 800;
-          font-size: 20px;
-          margin: 0;
-        }
-
-        .mb-modal-close {
-          background: #f5f5f5;
-          border: none;
-          border-radius: 8px;
-          padding: 8px 12px;
-          cursor: pointer;
-          font-size: 15px;
-          color: #666;
-          transition: all 0.2s;
-        }
-
-        .mb-modal-close:hover {
-          background: #ffebee;
-          color: #c62828;
-        }
-
-        .mb-form-error {
-          background: #ffebee;
-          color: #c62828;
-          padding: 12px;
-          border-radius: 8px;
-          margin-bottom: 16px;
-          font-weight: 600;
-          font-size: 13px;
-          white-space: pre-line;
-          border-left: 4px solid #c62828;
-        }
-
-        .mb-form {
-          display: flex;
-          flex-direction: column;
-          gap: 15px;
-        }
-
-        .mb-form-group {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-          min-width: 0;
-        }
-
-        .mb-form-row {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 14px;
-        }
-
-        .mb-label {
-          font-size: 12.5px;
-          font-weight: 700;
-          color: #1a237e;
-          letter-spacing: 0.3px;
-        }
-
-        .mb-input,
-        .mb-textarea {
-          width: 100%;
-          padding: 11px 14px;
-          border: 1.5px solid #ddd;
-          border-radius: 8px;
-          font-size: 14px;
-          font-weight: 500;
-          outline: none;
-          background: #fff;
-          font-family: inherit;
-          box-sizing: border-box;
-          transition: all 0.2s;
-        }
-
-        .mb-textarea {
-          resize: vertical;
-          min-height: 80px;
-        }
-
-        .mb-input:focus,
-        .mb-textarea:focus {
-          border-color: #1a237e;
-          box-shadow: 0 0 0 3px rgba(26, 35, 126, 0.08);
-        }
-
-        /* ================= IMAGE UPLOAD ================= */
-        .mb-upload-box {
-          border: 2px dashed #ddd;
-          border-radius: 12px;
-          padding: 32px 20px;
-          text-align: center;
-          cursor: pointer;
-          background: #fafafa;
-          transition: all 0.25s ease;
-        }
-
-        .mb-upload-box:hover:not(.uploading) {
-          border-color: #1a237e;
-          background: #f5f6fb;
-        }
-
-        .mb-upload-box.uploading {
-          cursor: not-allowed;
-          background: #f9f9f9;
-        }
-
-        .mb-upload-icon {
-          font-size: 36px;
-          color: #1a237e;
-          margin-bottom: 10px;
-        }
-
-        .mb-upload-icon.uploading-icon {
-          color: #f57c00;
-          font-size: 30px;
-        }
-
-        .mb-upload-text {
-          color: #1a237e;
-          font-weight: 700;
-          margin: 0 0 6px 0;
-          font-size: 14px;
-        }
-
-        .mb-upload-hint {
-          color: #999;
-          font-size: 11.5px;
-          font-weight: 500;
-          margin: 0;
-        }
-
-        .mb-progress-bar {
-          background: #e0e0e0;
-          border-radius: 10px;
-          height: 6px;
-          overflow: hidden;
-          max-width: 260px;
-          margin: 8px auto 0;
-        }
-
-        .mb-progress-fill {
-          background: #f57c00;
-          height: 100%;
-          transition: width 0.3s ease;
-        }
-
-        /* ================= IMAGE PREVIEW ================= */
-        .mb-image-preview {
-          display: flex;
-          gap: 14px;
-          align-items: center;
-          padding: 14px;
-          background: #f5f5f5;
-          border-radius: 12px;
-          border: 2px solid #e0e0e0;
-        }
-
-        .mb-image-preview img {
-          width: 70px;
-          height: 95px;
-          object-fit: cover;
-          border-radius: 8px;
-          border: 2px solid #fff;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-          flex-shrink: 0;
-        }
-
-        .mb-image-info {
-          flex: 1;
-          min-width: 0;
-        }
-
-        .mb-image-success {
-          color: #2e7d32;
-          font-weight: 700;
-          margin: 0 0 8px 0;
-          font-size: 13px;
-        }
-
-        .mb-image-actions {
-          display: flex;
-          gap: 8px;
-          flex-wrap: wrap;
-        }
-
-        .mb-btn-change,
-        .mb-btn-remove {
-          border: none;
-          padding: 6px 12px;
-          border-radius: 6px;
-          font-weight: 700;
-          font-size: 11.5px;
-          cursor: pointer;
-          font-family: inherit;
-          transition: all 0.2s;
-        }
-
-        .mb-btn-change {
-          background: #e3f2fd;
-          color: #1976d2;
-        }
-
-        .mb-btn-change:hover {
-          background: #1976d2;
-          color: #fff;
-        }
-
-        .mb-btn-remove {
-          background: #ffebee;
-          color: #c62828;
-        }
-
-        .mb-btn-remove:hover {
-          background: #c62828;
-          color: #fff;
-        }
-
-        /* ================= CHECKBOXES ================= */
-        .mb-checkbox-row {
-          display: flex;
-          gap: 22px;
-          flex-wrap: wrap;
-          padding: 4px 0;
-        }
-
-        .mb-checkbox-label {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-weight: 600;
-          font-size: 14px;
-          cursor: pointer;
-          color: #333;
-        }
-
-        .mb-checkbox-label input {
-          width: 16px;
-          height: 16px;
-          cursor: pointer;
-          accent-color: #1a237e;
-        }
-
-        /* ================= FORM FOOTER ================= */
-        .mb-form-footer {
-          display: flex;
-          gap: 12px;
-          justify-content: flex-end;
-          margin-top: 8px;
-          padding-top: 16px;
-          border-top: 1px solid #f0f0f0;
-        }
-
-        .mb-btn-cancel,
-        .mb-btn-save {
-          padding: 12px 22px;
-          border: none;
-          border-radius: 10px;
-          font-weight: 700;
-          font-size: 14px;
-          cursor: pointer;
-          font-family: inherit;
-          transition: all 0.25s;
-        }
-
-        .mb-btn-cancel {
-          background: #f5f5f5;
-          color: #666;
-        }
-
-        .mb-btn-cancel:hover:not(:disabled) {
-          background: #e0e0e0;
-        }
-
-        .mb-btn-save {
-          background: #1a237e;
-          color: #fff;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .mb-btn-save:hover:not(:disabled) {
-          background: #f57c00;
-          transform: translateY(-2px);
-          box-shadow: 0 8px 20px rgba(245, 124, 0, 0.3);
-        }
-
-        .mb-btn-cancel:disabled,
-        .mb-btn-save:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-
-        /* ============================================================
-           RESPONSIVE
-           ============================================================ */
-
-        @media (max-width: 1024px) {
-          .mb-wrapper {
-            padding: 20px;
-          }
-          .mb-title {
-            font-size: 22px;
-          }
-        }
-
-        @media (max-width: 768px) {
-          .mb-wrapper {
-            padding: 16px;
-          }
-
-          .mb-title {
-            font-size: 20px;
-          }
-
-          .mb-add-btn {
-            padding: 10px 16px;
-            font-size: 13px;
-          }
-
-          .mb-search-wrap {
-            max-width: 100%;
-          }
-
-          /* ✅ Hide desktop table, show mobile cards */
-          .mb-table-desktop {
-            display: none;
-          }
-
-          .mb-cards-mobile {
-            display: block;
-          }
-
-          /* Modal adjustments */
-          .mb-modal {
-            padding: 20px;
-            border-radius: 14px;
-            max-height: 94vh;
-          }
-
-          .mb-modal-title {
-            font-size: 17px;
-          }
-
-          .mb-form-row {
-            grid-template-columns: 1fr;
-            gap: 15px;
-          }
-
-          .mb-form-footer {
-            flex-direction: column-reverse;
-            gap: 10px;
-          }
-
-          .mb-btn-cancel,
-          .mb-btn-save {
-            width: 100%;
-            justify-content: center;
-            padding: 13px;
-          }
-
-          .mb-upload-box {
-            padding: 26px 16px;
-          }
-
-          .mb-upload-icon {
-            font-size: 30px;
-          }
-
-          .mb-image-preview {
-            padding: 12px;
-            gap: 12px;
-          }
-
-          .mb-image-preview img {
-            width: 60px;
-            height: 82px;
-          }
-        }
-
-        @media (max-width: 480px) {
-          .mb-wrapper {
-            padding: 12px;
-          }
-
-          .mb-title {
-            font-size: 18px;
-          }
-
-          .mb-card {
-            padding: 12px;
-          }
-
-          .mb-card-img {
-            width: 55px;
-            height: 74px;
-          }
-
-          .mb-card-title {
-            font-size: 13.5px;
-          }
-
-          .mb-modal {
-            padding: 16px;
-            border-radius: 12px;
-          }
-
-          .mb-modal-header {
-            margin-bottom: 18px;
-          }
-
-          .mb-modal-title {
-            font-size: 16px;
-          }
-        }
-      `}</style>
     </div>
   );
 };
