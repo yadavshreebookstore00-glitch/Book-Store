@@ -4,6 +4,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import connectDB from "./config/db.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
+import customItemRoutes from './routes/customItemRoutes.js';
 
 // Routes
 import authRoutes from "./routes/authRoutes.js";
@@ -145,6 +146,7 @@ const startServer = async () => {
     app.use("/api/sales", saleRoutes);
     app.use("/api/upi", upiRoutes);
     app.use('/api/contacts', contactRoutes);
+    app.use('/api/custom-items', customItemRoutes);
 
     app.use(notFound);
     app.use(errorHandler);

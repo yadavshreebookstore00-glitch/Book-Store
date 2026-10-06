@@ -1,11 +1,12 @@
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
 
 const saleItemSchema = new mongoose.Schema(
   {
     book: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Book",
+      ref: 'Book',
       required: false,
+      default: null,
     },
     name: {
       type: String,
@@ -37,7 +38,7 @@ const saleItemSchema = new mongoose.Schema(
       default: false,
     },
   },
-  { _id: false },
+  { _id: false }
 );
 
 const saleSchema = new mongoose.Schema(
@@ -50,42 +51,43 @@ const saleSchema = new mongoose.Schema(
     items: [saleItemSchema],
     customerName: {
       type: String,
-      default: "Walk-in Customer",
+      default: 'Walk-in Customer',
       trim: true,
     },
     customerPhone: {
       type: String,
-      default: "",
+      default: '',
       trim: true,
     },
     subtotal: { type: Number, required: true, default: 0 },
     discountAmount: { type: Number, default: 0 },
+    discountPercent: { type: Number, default: 0 },
     taxAmount: { type: Number, default: 0 },
     totalAmount: { type: Number, required: true, default: 0 },
     paidAmount: { type: Number, default: 0 },
     changeReturn: { type: Number, default: 0 },
     paymentMethod: {
       type: String,
-      enum: ["Cash", "UPI", "Others"],
-      default: "Cash",
+      enum: ['Cash', 'UPI', 'Others'],
+      default: 'Cash',
     },
     paymentStatus: {
       type: String,
-      enum: ["Paid", "Pending", "Partial"],
-      default: "Paid",
+      enum: ['Paid', 'Pending', 'Partial'],
+      default: 'Paid',
     },
-    notes: { type: String, default: "" },
+    notes: { type: String, default: '' },
     soldBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: 'User',
       required: true,
     },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
 
 saleSchema.index({ createdAt: -1 });
-// removed: saleSchema.index({ invoiceNumber: 1 });  <-- duplicate of unique: true
+saleSchema.index({ invoiceNumber: 1 });
 
-const Sale = mongoose.model("Sale", saleSchema);
+const Sale = mongoose.model('Sale', saleSchema);
 export default Sale;

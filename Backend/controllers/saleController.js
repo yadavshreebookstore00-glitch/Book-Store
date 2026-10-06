@@ -16,7 +16,11 @@ const generateInvoiceNumber = async () => {
   return `INV-${dateStr}-${String(count + 1).padStart(4, '0')}`;
 };
 
-// ===== CREATE SALE =====
+// ============================================================
+// CREATE SALE
+// @route POST /api/sales
+// @access Private/Admin
+// ============================================================
 export const createSale = async (req, res) => {
   try {
     const {
@@ -24,13 +28,13 @@ export const createSale = async (req, res) => {
       customerName,
       customerPhone,
       discountAmount = 0,
+      discountPercent = 0,
       taxAmount = 0,
       paymentMethod = 'Cash',
       paymentStatus = 'Paid',
       notes = '',
       reduceStock = true,
       paidAmount,
-      changeReturn = 0,
     } = req.body;
 
     if (!items || items.length === 0) {
@@ -40,21 +44,31 @@ export const createSale = async (req, res) => {
     let subtotal = 0;
     const processedItems = [];
 
+    // ===== Process each item =====
     for (const item of items) {
       const itemTotal = item.price * item.quantity - (item.discount || 0);
       subtotal += itemTotal;
 
+      // ✅ Custom item detect: agar book ID nahi hai toh manual
       const isManual = !item.book;
+
       processedItems.push({
         book: item.book || null,
-        name: item.name,
-        price: item.price,
-        quantity: item.quantity,
-        discount: item.discount || 0,
+        name: item.name.trim(),
+        price: Number(item.price),
+        quantity: Number(item.quantity),
+        discount: Number(item.discount) || 0,
         total: itemTotal,
-        isManual,
+        isManual: isManual || item.isManual || false,
       });
 
+      console.log(
+        `📦 Item: ${item.name} | Qty: ${item.quantity} | Type: ${
+          isManual ? 'CUSTOM' : 'BOOK'
+        }`
+      );
+
+      // ✅ Stock reduce SIRF book ke liye (custom items ka nahi)
       if (reduceStock && item.book) {
         const book = await Book.findById(item.book);
         if (book) {
@@ -69,7 +83,13 @@ export const createSale = async (req, res) => {
       }
     }
 
-    const totalAmount = subtotal - discountAmount + taxAmount;
+    // ===== Calculate discount =====
+    const percentDiscountAmount =
+      (subtotal * Number(discountPercent)) / 100;
+    const totalDiscount =
+      percentDiscountAmount + Number(discountAmount);
+
+    const totalAmount = subtotal - totalDiscount + Number(taxAmount);
     const invoiceNumber = await generateInvoiceNumber();
 
     const finalPaidAmount =
@@ -77,16 +97,21 @@ export const createSale = async (req, res) => {
         ? Number(paidAmount)
         : totalAmount;
 
-    const finalChangeReturn = Math.max(0, finalPaidAmount - totalAmount);
+    const finalChangeReturn = Math.max(
+      0,
+      finalPaidAmount - totalAmount
+    );
 
+    // ===== Save sale =====
     const sale = await Sale.create({
       invoiceNumber,
       items: processedItems,
       customerName: customerName || 'Walk-in Customer',
       customerPhone: customerPhone || '',
       subtotal,
-      discountAmount,
-      taxAmount,
+      discountAmount: Number(discountAmount),
+      discountPercent: Number(discountPercent),
+      taxAmount: Number(taxAmount),
       totalAmount,
       paidAmount: finalPaidAmount,
       changeReturn: finalChangeReturn,
@@ -96,6 +121,12 @@ export const createSale = async (req, res) => {
       soldBy: req.user._id,
     });
 
+    console.log(
+      `✅ Sale saved: ${invoiceNumber} | Custom items: ${
+        processedItems.filter((i) => i.isManual).length
+      }`
+    );
+
     res.status(201).json(sale);
   } catch (error) {
     console.error('Create sale error:', error);
@@ -103,10 +134,21 @@ export const createSale = async (req, res) => {
   }
 };
 
-// ===== GET ALL SALES =====
+// ============================================================
+// GET ALL SALES
+// @route GET /api/sales
+// @access Private/Admin
+// ============================================================
 export const getSales = async (req, res) => {
   try {
-    const { page = 1, limit = 20, startDate, endDate, search, paymentMethod } = req.query;
+    const {
+      page = 1,
+      limit = 20,
+      startDate,
+      endDate,
+      search,
+      paymentMethod,
+    } = req.query;
 
     const filter = {};
 
@@ -125,6 +167,7 @@ export const getSales = async (req, res) => {
         { invoiceNumber: { $regex: search, $options: 'i' } },
         { customerName: { $regex: search, $options: 'i' } },
         { customerPhone: { $regex: search, $options: 'i' } },
+        { 'items.name': { $regex: search, $options: 'i' } },
       ];
     }
 
@@ -148,10 +191,17 @@ export const getSales = async (req, res) => {
   }
 };
 
-// ===== GET SINGLE SALE =====
+// ============================================================
+// GET SINGLE SALE
+// @route GET /api/sales/:id
+// @access Private/Admin
+// ============================================================
 export const getSaleById = async (req, res) => {
   try {
-    const sale = await Sale.findById(req.params.id).populate('soldBy', 'name email');
+    const sale = await Sale.findById(req.params.id).populate(
+      'soldBy',
+      'name email'
+    );
     if (!sale) return res.status(404).json({ message: 'Sale not found' });
     res.json(sale);
   } catch (error) {
@@ -159,10 +209,15 @@ export const getSaleById = async (req, res) => {
   }
 };
 
-// ===== SALES SUMMARY =====
+// ============================================================
+// SALES SUMMARY (Today/Week/Month/Year)
+// @route GET /api/sales/summary
+// @access Private/Admin
+// ============================================================
 export const getSalesSummary = async (req, res) => {
   try {
     const now = new Date();
+
     const startOfToday = new Date(now);
     startOfToday.setHours(0, 0, 0, 0);
 
@@ -185,7 +240,9 @@ export const getSalesSummary = async (req, res) => {
           },
         },
       ]);
-      return result[0] || { totalRevenue: 0, totalSales: 0, totalItems: 0 };
+      return (
+        result[0] || { totalRevenue: 0, totalSales: 0, totalItems: 0 }
+      );
     };
 
     const [today, week, month, year] = await Promise.all([
@@ -201,10 +258,15 @@ export const getSalesSummary = async (req, res) => {
   }
 };
 
-// ===== TOP SELLING ITEMS =====
+// ============================================================
+// TOP SELLING ITEMS
+// @route GET /api/sales/top-items
+// @access Private/Admin
+// ============================================================
 export const getTopSellingItems = async (req, res) => {
   try {
     const { days = 30, limit = 5 } = req.query;
+
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - Number(days));
 
@@ -217,6 +279,7 @@ export const getTopSellingItems = async (req, res) => {
           name: { $first: '$items.name' },
           totalSold: { $sum: '$items.quantity' },
           revenue: { $sum: '$items.total' },
+          isManual: { $first: '$items.isManual' },
         },
       },
       { $sort: { totalSold: -1 } },
@@ -229,7 +292,11 @@ export const getTopSellingItems = async (req, res) => {
   }
 };
 
-// ===== DELETE SALE =====
+// ============================================================
+// DELETE SALE
+// @route DELETE /api/sales/:id
+// @access Private/Admin
+// ============================================================
 export const deleteSale = async (req, res) => {
   try {
     const sale = await Sale.findById(req.params.id);
