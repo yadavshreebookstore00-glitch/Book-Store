@@ -1,6 +1,11 @@
 // src/utils/printInvoice.js
 // Shared thermal-receipt (paper roll) invoice printer.
 // Used by both Billing.jsx and Sales.jsx so the bill always looks the same.
+//
+// v2: prints through a hidden iframe instead of window.open().
+// iOS Safari / iPhone blocks popups opened after an async call (like saving the
+// sale to the server), so the old popup method failed there. An iframe is part
+// of the page, so it can never be blocked.
 
 // ================== EASY SETTINGS ==================
 // Paper roll width in mm. Common sizes: 80 (3 inch) or 58 (2 inch).
@@ -23,6 +28,8 @@ const UPI = {
 };
 // ===================================================
 
+const FRAME_ID = 'invoice-print-frame';
+
 // Escape user-entered text so it can't break the bill HTML
 const esc = (v) =>
   String(v ?? '')
@@ -42,30 +49,17 @@ const formatDateTime = (date) =>
     minute: '2-digit',
   });
 
-/**
- * Print a sale as a thermal receipt.
- * @param {object} sale     sale object from the API
- * @param {function} onError optional, called with a message if printing fails
- */
-export const printInvoice = (sale, onError) => {
-  if (!sale) return;
-
-  const win = window.open('', '_blank', 'width=420,height=720');
-  if (!win) {
-    if (onError) onError('Popup blocked. Please allow popups to print.');
-    return;
-  }
-
-  // ----- Sizing based on paper width -----
+// ---------- Build the receipt HTML ----------
+const buildReceiptHtml = (sale) => {
   const narrow = PAPER_WIDTH_MM <= 58;
   const fontSize = narrow ? 10 : 12;
   const logoMaxWidth = narrow ? 32 : 44; // mm
   const qrMm = narrow ? 34 : 40; // mm
 
-  // ----- Logo (needs an absolute URL inside the print window) -----
+  // Logo needs an absolute URL inside the print frame
   const logoUrl = `${window.location.origin}${LOGO_PATH}`;
 
-  // ----- UPI QR -----
+  // UPI QR
   const upiAmount = Number(sale.paidAmount || sale.totalAmount).toFixed(2);
   const upiString = `upi://pay?pa=${UPI.id}&pn=${encodeURIComponent(
     UPI.name
@@ -74,14 +68,13 @@ export const printInvoice = (sale, onError) => {
     upiString
   )}`;
 
-  // ----- Discounts (Billing saves them per item) -----
+  // Discounts (Billing saves them per item)
   const itemDiscount = (sale.items || []).reduce(
     (sum, i) => sum + (i.discount || 0),
     0
   );
   const totalDiscount = itemDiscount + (sale.discountAmount || 0);
 
-  // ----- Items -----
   const itemsHtml = (sale.items || [])
     .map((item) => {
       const gross = item.price * item.quantity;
@@ -105,10 +98,11 @@ export const printInvoice = (sale, onError) => {
 
   const hasManual = (sale.items || []).some((i) => i.isManual);
 
-  win.document.write(`<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Invoice - ${esc(sale.invoiceNumber)}</title>
   <style>
     @page { size: ${PAPER_WIDTH_MM}mm auto; margin: 0; }
@@ -132,13 +126,13 @@ export const printInvoice = (sale, onError) => {
       max-width: ${logoMaxWidth}mm;
       max-height: 22mm;
       height: auto;
+      -webkit-filter: grayscale(1) contrast(1.4);
       filter: grayscale(1) contrast(1.4); /* thermal printers are black & white */
     }
     .store-name { font-size: ${fontSize + 5}px; font-weight: 900; letter-spacing: 1px; }
     .store-tag { font-weight: 700; letter-spacing: 2px; }
     .small { font-size: ${fontSize - 1}px; }
     .hr { border-top: 1px dashed #000; margin: 6px 0; }
-    .hr.solid { border-top: 2px solid #000; }
     .row { display: flex; justify-content: space-between; gap: 6px; padding: 1px 0; }
     .row span:last-child { text-align: right; white-space: nowrap; }
     .info .row span:last-child { white-space: normal; }
@@ -231,14 +225,79 @@ export const printInvoice = (sale, onError) => {
     <p class="small">Visit again</p>
     ${hasManual ? '<p class="small">* Custom item</p>' : ''}
   </div>
-
-  <script>
-    window.onload = function () {
-      window.print();
-      setTimeout(function () { window.close(); }, 500);
-    };
-  </script>
 </body>
-</html>`);
-  win.document.close();
+</html>`;
+};
+
+// ---------- Print HTML through a hidden iframe (works on iOS Safari) ----------
+const printHtml = (html, onError) => {
+  // Remove a leftover frame from an earlier print
+  const old = document.getElementById(FRAME_ID);
+  if (old && old.parentNode) old.parentNode.removeChild(old);
+
+  const iframe = document.createElement('iframe');
+  iframe.id = FRAME_ID;
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.setAttribute('title', 'Invoice print frame');
+  // NOT display:none and NOT 0x0 - Safari prints a blank page in those cases.
+  iframe.style.cssText = [
+    'position:fixed',
+    'left:0',
+    'top:0',
+    `width:${PAPER_WIDTH_MM}mm`,
+    'height:100vh',
+    'border:0',
+    'opacity:0',
+    'pointer-events:none',
+    'z-index:-1',
+  ].join(';');
+  document.body.appendChild(iframe);
+
+  const win = iframe.contentWindow;
+  const doc = iframe.contentDocument || (win && win.document);
+  if (!win || !doc) {
+    if (onError) onError('Could not open the print view on this device.');
+    return;
+  }
+
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  // Wait for the logo and QR image so they are not missing from the bill
+  const images = Array.from(doc.images || []);
+  const waitForImage = (img) =>
+    img.complete
+      ? Promise.resolve()
+      : new Promise((resolve) => {
+          img.addEventListener('load', resolve);
+          img.addEventListener('error', resolve);
+        });
+
+  const imagesReady = Promise.all(images.map(waitForImage));
+  const timeout = new Promise((resolve) => setTimeout(resolve, 4000));
+
+  Promise.race([imagesReady, timeout]).then(() => {
+    try {
+      win.focus();
+      win.print();
+    } catch (err) {
+      console.error('Print error:', err);
+      if (onError) onError('Could not open the print dialog.');
+    }
+    // Keep the frame for a while: removing it too early cancels printing on iOS.
+    setTimeout(() => {
+      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+    }, 5 * 60 * 1000);
+  });
+};
+
+/**
+ * Print a sale as a thermal receipt.
+ * @param {object} sale     sale object from the API
+ * @param {function} onError optional, called with a message if printing fails
+ */
+export const printInvoice = (sale, onError) => {
+  if (!sale) return;
+  printHtml(buildReceiptHtml(sale), onError);
 };
