@@ -8,7 +8,7 @@
   width: 100%;
   display: flex;
   justify-content: center;
-  padding: 20px 20px 0;
+  padding: 0px 20px 0;
 }
 
 .bannerContainer {
@@ -16,7 +16,7 @@
   width: 100%;
   max-width: 1170px;
   height: 480px;
-  border-radius: 16px;
+ 
   overflow: hidden;
   background: #0a0e27;
   box-shadow:

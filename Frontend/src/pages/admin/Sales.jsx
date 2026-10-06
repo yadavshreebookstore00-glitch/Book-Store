@@ -8,10 +8,171 @@ import {
   FaRupeeSign,
   FaShoppingBag,
   FaUser,
-  FaPhone,
+  FaPhoneAlt,
   FaCreditCard,
+  FaMoneyBillWave,
+  FaMobileAlt,
+  FaTimes,
+  FaChevronLeft,
+  FaChevronRight,
+  FaBoxOpen,
+  FaReceipt,
+  FaChartLine,
+  FaInbox,
 } from 'react-icons/fa';
 import api from '../../services/api';
+import { printInvoice } from '../../utils/printInvoice';
+
+// ===== Payment helpers =====
+const paymentIcon = (method) => {
+  if (method === 'Cash') return <FaMoneyBillWave />;
+  if (method === 'UPI') return <FaMobileAlt />;
+  return <FaCreditCard />;
+};
+
+const FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'today', label: 'Today' },
+  { key: 'week', label: 'Week' },
+  { key: 'month', label: 'Month' },
+  { key: 'year', label: 'Year' },
+];
+
+// ============================================================
+// STYLES
+// ============================================================
+const css = `
+.sl-page{padding:20px;max-width:1400px;margin:0 auto;box-sizing:border-box}
+.sl-page *{box-sizing:border-box}
+
+/* Header */
+.sl-header{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.sl-header-icon{width:46px;height:46px;border-radius:12px;background:linear-gradient(135deg,#1a237e,#3949ab);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.sl-header h1{margin:0;color:#1a237e;font-weight:800;font-size:24px;line-height:1.2}
+.sl-header p{margin:2px 0 0;color:#666;font-weight:500;font-size:13px}
+
+/* Summary */
+.sl-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.sl-stat{background:#fff;border-radius:14px;padding:16px;box-shadow:0 2px 12px rgba(26,35,126,.07);position:relative;overflow:hidden;transition:transform .2s,box-shadow .2s}
+.sl-stat::before{content:'';position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--c)}
+.sl-stat:hover{transform:translateY(-3px);box-shadow:0 12px 28px rgba(26,35,126,.12)}
+.sl-stat-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:12px}
+.sl-stat-label{margin:0;font-size:10.5px;color:#8a8fa5;font-weight:800;text-transform:uppercase;letter-spacing:.6px}
+.sl-stat-value{margin:5px 0 0;font-size:22px;font-weight:800;color:var(--c);letter-spacing:-.5px;line-height:1.1}
+.sl-stat-icon{width:40px;height:40px;border-radius:11px;background:var(--bg);color:var(--c);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.sl-stat-foot{display:flex;gap:8px;flex-wrap:wrap}
+.sl-stat-chip{display:inline-flex;align-items:center;gap:5px;background:#f4f5fa;color:#555;padding:4px 9px;border-radius:20px;font-size:11px;font-weight:700}
+.sl-stat-chip svg{color:var(--c);font-size:10px}
+
+/* Filters */
+.sl-filters{background:#fff;border-radius:14px;box-shadow:0 2px 12px rgba(26,35,126,.07);padding:14px;margin-bottom:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.sl-search{display:flex;align-items:center;gap:10px;background:#f4f5fa;border:2px solid transparent;border-radius:10px;padding:2px 14px;flex:1 1 260px;transition:border-color .15s,background .15s}
+.sl-search:focus-within{border-color:#1a237e;background:#fff}
+.sl-search svg{color:#1a237e;font-size:13px;flex-shrink:0}
+.sl-search input{flex:1;min-width:0;border:none;background:transparent;outline:none;font-size:14px;font-weight:500;color:#333;padding:11px 0;font-family:inherit}
+.sl-clear{background:#e3e5f0;border:none;color:#666;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0}
+.sl-chips{display:flex;gap:6px}
+.sl-chip{padding:9px 16px;border:2px solid #e0e3f0;background:#fff;color:#666;border-radius:20px;font-weight:700;font-size:12.5px;cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .15s}
+.sl-chip:hover:not(.active){border-color:#1a237e;color:#1a237e}
+.sl-chip.active{background:#1a237e;border-color:#1a237e;color:#fff;box-shadow:0 4px 10px rgba(26,35,126,.25)}
+
+/* Content */
+.sl-content{background:#fff;border-radius:14px;box-shadow:0 2px 12px rgba(26,35,126,.07);overflow:hidden}
+.sl-empty{padding:60px 20px;text-align:center;color:#999}
+.sl-empty svg{font-size:44px;color:#d6d9e8;margin-bottom:12px}
+.sl-empty p{margin:0;font-weight:700;font-size:15px;color:#666}
+.sl-empty small{display:block;margin-top:4px;font-size:12px;font-weight:500}
+
+/* Skeleton */
+.sl-skel{padding:6px 18px}
+.sl-skel-row{display:flex;gap:14px;align-items:center;padding:16px 0;border-bottom:1px solid #f0f0f5}
+.sl-skel-row:last-child{border-bottom:none}
+.sl-bar{height:14px;border-radius:7px;background:linear-gradient(90deg,#eef0f7 25%,#f8f9fc 50%,#eef0f7 75%);background-size:200% 100%;animation:sl-shine 1.2s infinite}
+@keyframes sl-shine{to{background-position:-200% 0}}
+
+/* Table */
+.sl-table-wrap{overflow-x:auto}
+.sl-table{width:100%;border-collapse:collapse}
+.sl-table th{padding:13px 18px;text-align:left;font-size:11px;font-weight:700;color:#1a237e;text-transform:uppercase;letter-spacing:.5px;background:#f5f6fb;white-space:nowrap}
+.sl-table td{padding:14px 18px;font-size:13px;font-weight:500;color:#333;vertical-align:middle;border-bottom:1px solid #f0f0f5}
+.sl-table tbody tr{transition:background .12s}
+.sl-table tbody tr:hover{background:#fafbff}
+.sl-table .r{text-align:right}.sl-table .c{text-align:center}
+.sl-inv{font-weight:700;color:#1a237e;font-size:12.5px}
+.sl-date{color:#555;font-size:12.5px;white-space:nowrap}
+.sl-cname{font-weight:600;color:#333}
+.sl-cphone{font-size:11px;color:#777;margin-top:2px;display:flex;align-items:center;gap:4px}
+.sl-amount{text-align:right;font-weight:800;color:#f57c00;font-size:15px;white-space:nowrap}
+
+.sl-badge{display:inline-flex;align-items:center;gap:5px;background:#e8eaf6;color:#1a237e;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+.sl-pay{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+.sl-pay.cash{background:#e8f5e9;color:#2e7d32}
+.sl-pay.upi{background:#e3f2fd;color:#1976d2}
+.sl-pay.others{background:#f3e5f5;color:#6a1b9a}
+
+.sl-acts{display:flex;gap:6px;justify-content:center}
+.sl-ibtn{border:none;width:34px;height:34px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;padding:0;transition:all .15s}
+.sl-ibtn.print{background:#e3f2fd;color:#1976d2}
+.sl-ibtn.print:hover{background:#1976d2;color:#fff}
+.sl-ibtn.del{background:#ffebee;color:#c62828}
+.sl-ibtn.del:hover{background:#c62828;color:#fff}
+
+/* Mobile cards */
+.sl-cards{display:none;padding:10px}
+.sl-card{border:1.5px solid #eceef7;border-radius:14px;padding:14px;margin-bottom:10px;background:#fff}
+.sl-card:last-child{margin-bottom:0}
+.sl-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding-bottom:12px;border-bottom:1px dashed #e3e6f1;margin-bottom:12px}
+.sl-card-top small{display:block;font-size:9.5px;font-weight:800;color:#999;text-transform:uppercase;letter-spacing:.6px;margin-bottom:3px}
+.sl-card-inv{font-size:13px;font-weight:700;color:#1a237e;word-break:break-all}
+.sl-card-amt{font-size:21px;font-weight:800;color:#f57c00;line-height:1}
+.sl-card-info{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px;margin-bottom:12px}
+.sl-card-row{display:flex;align-items:center;gap:8px;font-size:12.5px;color:#333;font-weight:500;min-width:0}
+.sl-card-row.full{grid-column:1 / -1}
+.sl-card-row svg{color:#1a237e;font-size:11px;flex-shrink:0;width:14px}
+.sl-card-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sl-card-foot{display:flex;gap:8px;align-items:center}
+.sl-card-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;padding:11px;border:none;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit}
+.sl-card-btn.print{background:#e3f2fd;color:#1976d2}
+.sl-card-btn.del{background:#ffebee;color:#c62828}
+.sl-card-btn:active{transform:scale(.98)}
+
+/* Pagination */
+.sl-pager{padding:14px;display:flex;justify-content:center;align-items:center;gap:12px;border-top:1px solid #f0f0f5;flex-wrap:wrap}
+.sl-page-btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;background:#1a237e;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:12.5px;cursor:pointer;font-family:inherit;transition:background .15s}
+.sl-page-btn:hover:not(:disabled){background:#f57c00}
+.sl-page-btn:disabled{background:#f0f1f7;color:#aaa;cursor:not-allowed}
+.sl-page-info{font-weight:700;color:#1a237e;font-size:13px}
+
+/* ============ Tablet ============ */
+@media (max-width:1024px){
+  .sl-page{padding:16px}
+  .sl-summary{grid-template-columns:repeat(2,1fr);gap:12px}
+}
+
+/* ============ Phone ============ */
+@media (max-width:768px){
+  .sl-page{padding:12px}
+  .sl-header h1{font-size:20px}
+  .sl-header-icon{width:40px;height:40px;font-size:17px}
+  .sl-summary{gap:10px;margin-bottom:16px}
+  .sl-stat{padding:13px}
+  .sl-stat-value{font-size:19px}
+  .sl-stat-icon{width:34px;height:34px;font-size:14px}
+  .sl-filters{padding:12px;gap:10px}
+  .sl-search{flex:1 1 100%}
+  .sl-search input{font-size:16px} /* stops iOS zoom */
+  .sl-chips{width:100%;overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch}
+  .sl-chip{flex:1;padding:9px 12px;text-align:center}
+  .sl-table-wrap{display:none}
+  .sl-cards{display:block}
+  .sl-skel{padding:6px 14px}
+}
+
+@media (max-width:380px){
+  .sl-stat-value{font-size:17px}
+  .sl-card-info{grid-template-columns:1fr}
+}
+`;
 
 const Sales = () => {
   const [sales, setSales] = useState([]);
@@ -19,6 +180,7 @@ const Sales = () => {
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -38,17 +200,21 @@ const Sales = () => {
       const params = new URLSearchParams();
       params.append('page', page);
       params.append('limit', 15);
-      if (search) params.append('search', search);
+      if (debouncedSearch) params.append('search', debouncedSearch);
 
       const now = new Date();
-      let start = '', end = '';
+      let start = '',
+        end = '';
 
       if (filterType === 'today') {
-        const d = new Date(); d.setHours(0, 0, 0, 0);
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
         start = d.toISOString();
         end = new Date().toISOString();
       } else if (filterType === 'week') {
-        const d = new Date(); d.setDate(d.getDate() - 6); d.setHours(0, 0, 0, 0);
+        const d = new Date();
+        d.setDate(d.getDate() - 6);
+        d.setHours(0, 0, 0, 0);
         start = d.toISOString();
         end = new Date().toISOString();
       } else if (filterType === 'month') {
@@ -78,84 +244,23 @@ const Sales = () => {
     fetchSummary();
   }, []);
 
+  // Debounce search (avoid an API call on every keystroke)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
   useEffect(() => {
     fetchSales();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, filterType, search]);
+  }, [page, filterType, debouncedSearch]);
 
-  // ===== Print Invoice =====
+  // ===== Print Invoice (paper-roll receipt with logo + UPI QR) =====
   const handlePrint = (sale) => {
-    const printWindow = window.open('', '_blank', 'width=800,height=600');
-    const formatDate = (date) =>
-      new Date(date).toLocaleString('en-IN', {
-        day: '2-digit', month: 'short', year: 'numeric',
-        hour: '2-digit', minute: '2-digit',
-      });
-
-    printWindow.document.write(`
-      <!DOCTYPE html><html><head><title>Invoice</title>
-      <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Courier New', monospace; padding: 20px; max-width: 400px; margin: 0 auto; }
-        .header { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 15px; margin-bottom: 15px; }
-        .header h1 { font-size: 22px; font-weight: 900; }
-        .info { margin-bottom: 15px; font-size: 12px; border-bottom: 1px dashed #000; padding-bottom: 10px; }
-        .info-row { display: flex; justify-content: space-between; }
-        table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 15px; }
-        th { text-align: left; border-bottom: 2px solid #000; padding: 8px 0; }
-        th:last-child, td:last-child { text-align: right; }
-        td { padding: 6px 0; border-bottom: 1px dashed #eee; }
-        .totals { border-top: 2px dashed #000; padding-top: 10px; font-size: 12px; }
-        .totals-row { display: flex; justify-content: space-between; padding: 4px 0; }
-        .grand-total { font-size: 16px; font-weight: 900; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 10px 0; margin-top: 5px; }
-        .footer { text-align: center; margin-top: 20px; padding-top: 15px; border-top: 2px dashed #000; font-size: 11px; }
-      </style></head><body>
-      <div class="header">
-        <h1>YADAV SHREE</h1>
-        <p><strong>BOOK STORE</strong></p>
-        <p>Raipur, Chhattisgarh - 492001</p>
-        <p>📞 +91 98765 43210</p>
-      </div>
-      <div class="info">
-        <div class="info-row"><span><strong>Invoice:</strong> ${sale.invoiceNumber}</span></div>
-        <div class="info-row"><span><strong>Date:</strong> ${formatDate(sale.createdAt)}</span></div>
-        <div class="info-row"><span><strong>Customer:</strong> ${sale.customerName}</span></div>
-        ${sale.customerPhone ? `<div class="info-row"><span><strong>Phone:</strong> ${sale.customerPhone}</span></div>` : ''}
-        <div class="info-row"><span><strong>Payment:</strong> ${sale.paymentMethod}</span></div>
-      </div>
-      <table>
-        <thead><tr><th>Item</th><th>Qty</th><th>Rate</th><th>Amt</th></tr></thead>
-        <tbody>
-          ${sale.items.map((item) => `
-            <tr>
-              <td>${item.name}</td>
-              <td>${item.quantity}</td>
-              <td>₹${item.price}</td>
-              <td>₹${(item.price * item.quantity - (item.discount || 0)).toFixed(2)}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-      <div class="totals">
-        <div class="totals-row"><span>Subtotal:</span><span>₹${sale.subtotal.toFixed(2)}</span></div>
-        ${sale.discountAmount > 0 ? `<div class="totals-row"><span>Discount:</span><span>-₹${sale.discountAmount.toFixed(2)}</span></div>` : ''}
-        ${sale.taxAmount > 0 ? `<div class="totals-row"><span>Tax:</span><span>+₹${sale.taxAmount.toFixed(2)}</span></div>` : ''}
-        <div class="totals-row grand-total"><span>TOTAL:</span><span>₹${sale.totalAmount.toFixed(2)}</span></div>
-        ${sale.paymentMethod === 'Cash' ? `
-          <div class="totals-row" style="margin-top:8px;border-top:1px dashed #000;padding-top:8px;">
-            <span>Paid:</span><span>₹${(sale.paidAmount || sale.totalAmount).toFixed(2)}</span>
-          </div>
-          ${(sale.changeReturn || 0) > 0 ? `<div class="totals-row"><span>Change:</span><span>₹${sale.changeReturn.toFixed(2)}</span></div>` : ''}
-        ` : ''}
-      </div>
-      <div class="footer">
-        <p><strong>Thank you for shopping!</strong></p>
-        <p>Visit again 🙏</p>
-      </div>
-      <script>window.onload = function() { window.print(); setTimeout(() => window.close(), 500); };</script>
-      </body></html>
-    `);
-    printWindow.document.close();
+    printInvoice(sale, (msg) => alert(msg));
   };
 
   const handleDelete = async (id) => {
@@ -171,27 +276,39 @@ const Sales = () => {
 
   const formatDate = (date) =>
     new Date(date).toLocaleString('en-IN', {
-      day: '2-digit', month: 'short', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     });
 
   const formatDateShort = (date) =>
     new Date(date).toLocaleString('en-IN', {
-      day: '2-digit', month: 'short',
-      hour: '2-digit', minute: '2-digit',
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
     });
 
   return (
-    <div className="sales-wrapper">
+    <div className="sl-page">
+      <style>{css}</style>
+
       {/* ===== Header ===== */}
-      <div className="sales-header">
-        <h1 className="sales-title">📊 Sales History</h1>
-        <p className="sales-subtitle">View all your sales transactions</p>
+      <div className="sl-header">
+        <div className="sl-header-icon">
+          <FaChartLine />
+        </div>
+        <div>
+          <h1>Sales History</h1>
+          <p>View all your sales transactions</p>
+        </div>
       </div>
 
       {/* ===== Summary Cards ===== */}
       {summary && (
-        <div className="sales-summary-grid">
+        <div className="sl-summary">
           <SummaryCard
             title="Today"
             data={summary.today}
@@ -224,30 +341,36 @@ const Sales = () => {
       )}
 
       {/* ===== Filters ===== */}
-      <div className="sales-filters">
-        <div className="sales-search-wrap">
-          <FaSearch className="sales-search-icon" />
+      <div className="sl-filters">
+        <div className="sl-search">
+          <FaSearch />
           <input
             type="text"
             placeholder="Search invoice / customer..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="sales-search"
           />
+          {search && (
+            <button
+              type="button"
+              className="sl-clear"
+              onClick={() => setSearch('')}
+              aria-label="Clear search"
+            >
+              <FaTimes size={10} />
+            </button>
+          )}
         </div>
 
-        <div className="sales-filter-btns">
-          {[
-            { key: 'all', label: 'All' },
-            { key: 'today', label: 'Today' },
-            { key: 'week', label: 'Week' },
-            { key: 'month', label: 'Month' },
-            { key: 'year', label: 'Year' },
-          ].map((f) => (
+        <div className="sl-chips">
+          {FILTERS.map((f) => (
             <button
               key={f.key}
-              onClick={() => { setFilterType(f.key); setPage(1); }}
-              className={`sales-filter-btn ${filterType === f.key ? 'active' : ''}`}
+              onClick={() => {
+                setFilterType(f.key);
+                setPage(1);
+              }}
+              className={`sl-chip ${filterType === f.key ? 'active' : ''}`}
             >
               {f.label}
             </button>
@@ -256,16 +379,29 @@ const Sales = () => {
       </div>
 
       {/* ===== Sales Content ===== */}
-      <div className="sales-content">
+      <div className="sl-content">
         {loading ? (
-          <div className="sales-loading">Loading...</div>
+          <div className="sl-skel">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <div className="sl-skel-row" key={n}>
+                <div className="sl-bar" style={{ width: '22%' }} />
+                <div className="sl-bar" style={{ width: '28%' }} />
+                <div className="sl-bar" style={{ width: '20%' }} />
+                <div className="sl-bar" style={{ width: '12%', marginLeft: 'auto' }} />
+              </div>
+            ))}
+          </div>
         ) : sales.length === 0 ? (
-          <div className="sales-empty">📊 No sales found</div>
+          <div className="sl-empty">
+            <FaInbox />
+            <p>No sales found</p>
+            <small>Try a different search or date filter</small>
+          </div>
         ) : (
           <>
             {/* ===== Desktop Table ===== */}
-            <div className="sales-table-desktop">
-              <table className="sales-table">
+            <div className="sl-table-wrap">
+              <table className="sl-table">
                 <thead>
                   <tr>
                     <th>Invoice</th>
@@ -273,45 +409,50 @@ const Sales = () => {
                     <th>Customer</th>
                     <th>Items</th>
                     <th>Payment</th>
-                    <th className="text-right">Amount</th>
-                    <th className="text-center">Actions</th>
+                    <th className="r">Amount</th>
+                    <th className="c">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {sales.map((sale) => (
                     <tr key={sale._id}>
-                      <td className="sales-invoice">{sale.invoiceNumber}</td>
-                      <td>{formatDate(sale.createdAt)}</td>
+                      <td className="sl-inv">{sale.invoiceNumber}</td>
+                      <td className="sl-date">{formatDate(sale.createdAt)}</td>
                       <td>
-                        <div className="sales-cust-name">{sale.customerName}</div>
+                        <div className="sl-cname">
+                          {sale.customerName || 'Walk-in Customer'}
+                        </div>
                         {sale.customerPhone && (
-                          <div className="sales-cust-phone">{sale.customerPhone}</div>
+                          <div className="sl-cphone">
+                            <FaPhoneAlt size={9} /> {sale.customerPhone}
+                          </div>
                         )}
                       </td>
                       <td>
-                        <span className="sales-items-badge">
-                          {sale.items.length} items
+                        <span className="sl-badge">
+                          <FaBoxOpen size={11} /> {sale.items.length}{' '}
+                          {sale.items.length === 1 ? 'item' : 'items'}
                         </span>
                       </td>
                       <td>
-                        <span className={`sales-payment ${sale.paymentMethod.toLowerCase()}`}>
-                          {sale.paymentMethod}
+                        <span className={`sl-pay ${sale.paymentMethod.toLowerCase()}`}>
+                          {paymentIcon(sale.paymentMethod)} {sale.paymentMethod}
                         </span>
                       </td>
-                      <td className="sales-amount">₹{sale.totalAmount.toFixed(0)}</td>
+                      <td className="sl-amount">₹{sale.totalAmount.toFixed(0)}</td>
                       <td>
-                        <div className="sales-actions">
+                        <div className="sl-acts">
                           <button
+                            className="sl-ibtn print"
                             onClick={() => handlePrint(sale)}
                             title="Print"
-                            className="sales-btn-print"
                           >
                             <FaPrint />
                           </button>
                           <button
+                            className="sl-ibtn del"
                             onClick={() => handleDelete(sale._id)}
                             title="Delete"
-                            className="sales-btn-delete"
                           >
                             <FaTrash />
                           </button>
@@ -324,66 +465,58 @@ const Sales = () => {
             </div>
 
             {/* ===== Mobile Cards ===== */}
-            <div className="sales-cards-mobile">
+            <div className="sl-cards">
               {sales.map((sale) => (
-                <div key={sale._id} className="sales-card">
-                  {/* Top: Invoice + Amount */}
-                  <div className="sales-card-top">
-                    <div className="sales-card-invoice-wrap">
-                      <span className="sales-card-label">Invoice</span>
-                      <span className="sales-card-invoice">{sale.invoiceNumber}</span>
+                <div key={sale._id} className="sl-card">
+                  <div className="sl-card-top">
+                    <div style={{ minWidth: 0 }}>
+                      <small>Invoice</small>
+                      <div className="sl-card-inv">{sale.invoiceNumber}</div>
                     </div>
-                    <div className="sales-card-amount-wrap">
-                      <span className="sales-card-label">Amount</span>
-                      <span className="sales-card-amount">₹{sale.totalAmount.toFixed(0)}</span>
+                    <div style={{ textAlign: 'right' }}>
+                      <small>Amount</small>
+                      <div className="sl-card-amt">₹{sale.totalAmount.toFixed(0)}</div>
                     </div>
                   </div>
 
-                  {/* Info Rows */}
-                  <div className="sales-card-info">
-                    <div className="sales-card-row">
-                      <FaCalendarAlt className="sales-card-icon" />
+                  <div className="sl-card-info">
+                    <div className="sl-card-row">
+                      <FaCalendarAlt />
                       <span>{formatDateShort(sale.createdAt)}</span>
                     </div>
-
-                    <div className="sales-card-row">
-                      <FaUser className="sales-card-icon" />
+                    <div className="sl-card-row">
+                      <FaUser />
                       <span>{sale.customerName || 'Walk-in Customer'}</span>
                     </div>
-
                     {sale.customerPhone && (
-                      <div className="sales-card-row">
-                        <FaPhone className="sales-card-icon" />
+                      <div className="sl-card-row">
+                        <FaPhoneAlt />
                         <span>{sale.customerPhone}</span>
                       </div>
                     )}
-
-                    <div className="sales-card-row">
-                      <FaCreditCard className="sales-card-icon" />
-                      <span className={`sales-payment ${sale.paymentMethod.toLowerCase()}`}>
-                        {sale.paymentMethod}
+                    <div className="sl-card-row">
+                      <span className={`sl-pay ${sale.paymentMethod.toLowerCase()}`}>
+                        {paymentIcon(sale.paymentMethod)} {sale.paymentMethod}
+                      </span>
+                    </div>
+                    <div className="sl-card-row">
+                      <span className="sl-badge">
+                        <FaBoxOpen size={11} /> {sale.items.length}{' '}
+                        {sale.items.length === 1 ? 'item' : 'items'}
                       </span>
                     </div>
                   </div>
 
-                  {/* Items count */}
-                  <div className="sales-card-items-row">
-                    <span className="sales-items-badge">
-                      📦 {sale.items.length} {sale.items.length === 1 ? 'item' : 'items'}
-                    </span>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="sales-card-actions">
+                  <div className="sl-card-foot">
                     <button
+                      className="sl-card-btn print"
                       onClick={() => handlePrint(sale)}
-                      className="sales-card-btn print"
                     >
                       <FaPrint /> Print
                     </button>
                     <button
+                      className="sl-card-btn del"
                       onClick={() => handleDelete(sale._id)}
-                      className="sales-card-btn delete"
                     >
                       <FaTrash /> Delete
                     </button>
@@ -394,576 +527,29 @@ const Sales = () => {
 
             {/* ===== Pagination ===== */}
             {totalPages > 1 && (
-              <div className="sales-pagination">
+              <div className="sl-pager">
                 <button
+                  className="sl-page-btn"
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="sales-page-btn"
                 >
-                  ← Prev
+                  <FaChevronLeft size={10} /> Prev
                 </button>
-                <span className="sales-page-info">
+                <span className="sl-page-info">
                   Page {page} of {totalPages}
                 </span>
                 <button
+                  className="sl-page-btn"
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className="sales-page-btn"
                 >
-                  Next →
+                  Next <FaChevronRight size={10} />
                 </button>
               </div>
             )}
           </>
         )}
       </div>
-
-      {/* ============================================================
-          CSS
-          ============================================================ */}
-      <style>{`
-        /* ================= WRAPPER ================= */
-        .sales-wrapper {
-          padding: 24px;
-          width: 100%;
-          box-sizing: border-box;
-        }
-
-        /* ================= HEADER ================= */
-        .sales-header {
-          margin-bottom: 24px;
-        }
-
-        .sales-title {
-          color: #1a237e;
-          font-weight: 800;
-          font-size: 24px;
-          margin: 0;
-        }
-
-        .sales-subtitle {
-          color: #666;
-          font-weight: 500;
-          font-size: 13px;
-          margin: 5px 0 0 0;
-        }
-
-        /* ================= SUMMARY GRID ================= */
-        .sales-summary-grid {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 15px;
-          margin-bottom: 24px;
-        }
-
-        /* ================= FILTERS ================= */
-        .sales-filters {
-          background: #fff;
-          padding: 16px;
-          border-radius: 12px;
-          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-          margin-bottom: 20px;
-          display: flex;
-          gap: 12px;
-          flex-wrap: wrap;
-          align-items: center;
-        }
-
-        .sales-search-wrap {
-          display: flex;
-          align-items: center;
-          background: #f5f5f5;
-          border-radius: 8px;
-          padding: 9px 14px;
-          flex: 1 1 250px;
-          gap: 8px;
-        }
-
-        .sales-search-icon {
-          color: #1a237e;
-          font-size: 13px;
-          flex-shrink: 0;
-        }
-
-        .sales-search {
-          flex: 1;
-          border: none;
-          background: transparent;
-          outline: none;
-          font-size: 13px;
-          font-weight: 500;
-          color: #333;
-          min-width: 0;
-        }
-
-        .sales-filter-btns {
-          display: flex;
-          gap: 6px;
-          flex-wrap: wrap;
-        }
-
-        .sales-filter-btn {
-          padding: 8px 16px;
-          border: 2px solid #ddd;
-          background: #fff;
-          color: #666;
-          border-radius: 8px;
-          font-weight: 700;
-          font-size: 12px;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          font-family: inherit;
-          white-space: nowrap;
-        }
-
-        .sales-filter-btn.active {
-          border-color: #1a237e;
-          background: #1a237e;
-          color: #fff;
-        }
-
-        .sales-filter-btn:hover:not(.active) {
-          border-color: #1a237e;
-          color: #1a237e;
-        }
-
-        /* ================= CONTENT ================= */
-        .sales-content {
-          background: #fff;
-          border-radius: 12px;
-          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-          overflow: hidden;
-        }
-
-        .sales-loading,
-        .sales-empty {
-          padding: 50px 20px;
-          text-align: center;
-          color: #666;
-          font-weight: 600;
-          font-size: 14px;
-        }
-
-        /* ================= DESKTOP TABLE ================= */
-        .sales-table-desktop {
-          display: block;
-          overflow-x: auto;
-        }
-
-        .sales-table {
-          width: 100%;
-          border-collapse: collapse;
-        }
-
-        .sales-table thead tr {
-          background: #f5f5f5;
-        }
-
-        .sales-table th {
-          padding: 14px 18px;
-          text-align: left;
-          font-size: 11px;
-          font-weight: 700;
-          color: #1a237e;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          white-space: nowrap;
-        }
-
-        .sales-table td {
-          padding: 14px 18px;
-          font-size: 13px;
-          font-weight: 500;
-          color: #333;
-          vertical-align: middle;
-          border-bottom: 1px solid #f0f0f0;
-        }
-
-        .sales-table tbody tr:hover {
-          background: #fafafa;
-        }
-
-        .sales-table .text-right { text-align: right; }
-        .sales-table .text-center { text-align: center; }
-
-        .sales-invoice {
-          font-weight: 700;
-          color: #1a237e;
-          font-size: 12.5px;
-        }
-
-        .sales-cust-name {
-          font-weight: 600;
-          color: #333;
-        }
-
-        .sales-cust-phone {
-          font-size: 11px;
-          color: #666;
-          margin-top: 2px;
-        }
-
-        .sales-items-badge {
-          background: #e8eaf6;
-          color: #1a237e;
-          padding: 3px 10px;
-          border-radius: 12px;
-          font-size: 11px;
-          font-weight: 700;
-          white-space: nowrap;
-        }
-
-        .sales-payment {
-          padding: 3px 10px;
-          border-radius: 12px;
-          font-size: 11px;
-          font-weight: 700;
-          white-space: nowrap;
-          display: inline-block;
-        }
-
-        .sales-payment.cash {
-          background: #e8f5e9;
-          color: #2e7d32;
-        }
-
-        .sales-payment.upi {
-          background: #e3f2fd;
-          color: #1976d2;
-        }
-
-        .sales-payment.others {
-          background: #f3e5f5;
-          color: #6a1b9a;
-        }
-
-        .sales-amount {
-          text-align: right;
-          font-weight: 800;
-          color: #f57c00;
-          font-size: 15px;
-        }
-
-        .sales-actions {
-          display: flex;
-          gap: 6px;
-          justify-content: center;
-        }
-
-        .sales-btn-print,
-        .sales-btn-delete {
-          border: none;
-          padding: 7px 10px;
-          border-radius: 6px;
-          cursor: pointer;
-          font-size: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: all 0.2s ease;
-        }
-
-        .sales-btn-print {
-          background: #e3f2fd;
-          color: #1976d2;
-        }
-
-        .sales-btn-print:hover {
-          background: #1976d2;
-          color: #fff;
-        }
-
-        .sales-btn-delete {
-          background: #ffebee;
-          color: #c62828;
-        }
-
-        .sales-btn-delete:hover {
-          background: #c62828;
-          color: #fff;
-        }
-
-        /* ================= MOBILE CARDS ================= */
-        .sales-cards-mobile {
-          display: none;
-        }
-
-        .sales-card {
-          background: #fff;
-          padding: 14px;
-          border-bottom: 1px solid #f0f0f0;
-        }
-
-        .sales-card:last-child {
-          border-bottom: none;
-        }
-
-        .sales-card-top {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          gap: 10px;
-          padding-bottom: 10px;
-          border-bottom: 1px dashed #e0e0e0;
-          margin-bottom: 12px;
-        }
-
-        .sales-card-invoice-wrap,
-        .sales-card-amount-wrap {
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-          min-width: 0;
-        }
-
-        .sales-card-amount-wrap {
-          text-align: right;
-        }
-
-        .sales-card-label {
-          font-size: 9.5px;
-          font-weight: 800;
-          color: #999;
-          text-transform: uppercase;
-          letter-spacing: 0.6px;
-        }
-
-        .sales-card-invoice {
-          font-size: 12.5px;
-          font-weight: 700;
-          color: #1a237e;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-
-        .sales-card-amount {
-          font-size: 18px;
-          font-weight: 800;
-          color: #f57c00;
-          line-height: 1;
-        }
-
-        .sales-card-info {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-          margin-bottom: 12px;
-        }
-
-        .sales-card-row {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-size: 12.5px;
-          color: #333;
-          font-weight: 500;
-        }
-
-        .sales-card-icon {
-          color: #1a237e;
-          font-size: 11px;
-          flex-shrink: 0;
-          width: 14px;
-        }
-
-        .sales-card-items-row {
-          padding-top: 10px;
-          padding-bottom: 10px;
-          border-top: 1px solid #f5f5f5;
-          border-bottom: 1px solid #f5f5f5;
-          margin-bottom: 12px;
-        }
-
-        .sales-card-actions {
-          display: flex;
-          gap: 8px;
-        }
-
-        .sales-card-btn {
-          flex: 1;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
-          padding: 10px;
-          border: none;
-          border-radius: 8px;
-          font-weight: 700;
-          font-size: 12.5px;
-          cursor: pointer;
-          font-family: inherit;
-          transition: all 0.2s ease;
-        }
-
-        .sales-card-btn.print {
-          background: #e3f2fd;
-          color: #1976d2;
-        }
-
-        .sales-card-btn.print:hover {
-          background: #1976d2;
-          color: #fff;
-        }
-
-        .sales-card-btn.delete {
-          background: #ffebee;
-          color: #c62828;
-        }
-
-        .sales-card-btn.delete:hover {
-          background: #c62828;
-          color: #fff;
-        }
-
-        /* ================= PAGINATION ================= */
-        .sales-pagination {
-          padding: 15px;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          gap: 10px;
-          border-top: 1px solid #f0f0f0;
-          flex-wrap: wrap;
-        }
-
-        .sales-page-btn {
-          padding: 8px 16px;
-          background: #1a237e;
-          color: #fff;
-          border: none;
-          border-radius: 6px;
-          font-weight: 700;
-          font-size: 12px;
-          cursor: pointer;
-          font-family: inherit;
-          transition: all 0.2s ease;
-        }
-
-        .sales-page-btn:disabled {
-          background: #f5f5f5;
-          color: #999;
-          cursor: not-allowed;
-        }
-
-        .sales-page-btn:hover:not(:disabled) {
-          background: #f57c00;
-        }
-
-        .sales-page-info {
-          font-weight: 700;
-          color: #1a237e;
-          font-size: 13px;
-        }
-
-        /* ============================================================
-           RESPONSIVE
-           ============================================================ */
-
-        @media (max-width: 1024px) {
-          .sales-wrapper {
-            padding: 20px;
-          }
-          .sales-summary-grid {
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-          }
-          .sales-title {
-            font-size: 22px;
-          }
-        }
-
-        @media (max-width: 768px) {
-          .sales-wrapper {
-            padding: 16px;
-          }
-
-          .sales-title {
-            font-size: 20px;
-          }
-
-          .sales-subtitle {
-            font-size: 12.5px;
-          }
-
-          .sales-summary-grid {
-            grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
-            margin-bottom: 18px;
-          }
-
-          .sales-filters {
-            padding: 14px;
-            gap: 10px;
-          }
-
-          .sales-search-wrap {
-            flex: 1 1 100%;
-          }
-
-          .sales-filter-btns {
-            width: 100%;
-            justify-content: space-between;
-          }
-
-          .sales-filter-btn {
-            flex: 1;
-            padding: 8px 8px;
-            font-size: 11.5px;
-          }
-
-          /* Hide desktop table, show mobile cards */
-          .sales-table-desktop {
-            display: none;
-          }
-
-          .sales-cards-mobile {
-            display: block;
-          }
-
-          .sales-pagination {
-            padding: 14px 12px;
-          }
-
-          .sales-page-btn {
-            padding: 8px 14px;
-            font-size: 11.5px;
-          }
-
-          .sales-page-info {
-            font-size: 12px;
-          }
-        }
-
-        @media (max-width: 480px) {
-          .sales-wrapper {
-            padding: 12px;
-          }
-
-          .sales-summary-grid {
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-          }
-
-          .sales-title {
-            font-size: 18px;
-          }
-
-          .sales-card {
-            padding: 12px;
-          }
-
-          .sales-filter-btn {
-            padding: 7px 6px;
-            font-size: 11px;
-          }
-
-          .sales-page-btn {
-            padding: 7px 12px;
-            font-size: 11px;
-          }
-        }
-      `}</style>
     </div>
   );
 };
@@ -972,88 +558,23 @@ const Sales = () => {
 // Summary Card Component
 // ============================================================
 const SummaryCard = ({ title, data, color, bg, icon }) => (
-  <div
-    className="sales-summary-card"
-    style={{
-      background: '#fff',
-      padding: '16px',
-      borderRadius: '12px',
-      boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
-      borderLeft: `5px solid ${color}`,
-      transition: 'transform 0.25s ease, box-shadow 0.25s ease',
-      cursor: 'default',
-    }}
-    onMouseEnter={(e) => {
-      e.currentTarget.style.transform = 'translateY(-4px)';
-      e.currentTarget.style.boxShadow = '0 12px 28px rgba(26, 35, 126, 0.1)';
-    }}
-    onMouseLeave={(e) => {
-      e.currentTarget.style.transform = 'translateY(0)';
-      e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.05)';
-    }}
-  >
-    <div
-      style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: '10px',
-      }}
-    >
+  <div className="sl-stat" style={{ '--c': color, '--bg': bg }}>
+    <div className="sl-stat-top">
       <div style={{ minWidth: 0 }}>
-        <p
-          style={{
-            fontSize: '10.5px',
-            color: '#999',
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px',
-            margin: 0,
-          }}
-        >
-          {title}
-        </p>
-        <h3
-          style={{
-            fontSize: '20px',
-            color: color,
-            fontWeight: 800,
-            margin: '5px 0 0 0',
-            letterSpacing: '-0.5px',
-          }}
-        >
+        <p className="sl-stat-label">{title}</p>
+        <h3 className="sl-stat-value">
           ₹{data.totalRevenue.toLocaleString('en-IN')}
         </h3>
       </div>
-      <div
-        style={{
-          width: '38px',
-          height: '38px',
-          borderRadius: '10px',
-          background: bg,
-          color: color,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '16px',
-          flexShrink: 0,
-        }}
-      >
-        {icon}
-      </div>
+      <div className="sl-stat-icon">{icon}</div>
     </div>
-    <div
-      style={{
-        display: 'flex',
-        gap: '12px',
-        fontSize: '11px',
-        color: '#666',
-        fontWeight: 600,
-        flexWrap: 'wrap',
-      }}
-    >
-      <span>🧾 {data.totalSales} sales</span>
-      <span>📦 {data.totalItems} items</span>
+    <div className="sl-stat-foot">
+      <span className="sl-stat-chip">
+        <FaReceipt /> {data.totalSales} sales
+      </span>
+      <span className="sl-stat-chip">
+        <FaBoxOpen /> {data.totalItems} items
+      </span>
     </div>
   </div>
 );

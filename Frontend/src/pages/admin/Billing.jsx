@@ -13,10 +13,25 @@ import {
   FaMoneyBillWave,
   FaMobileAlt,
   FaCreditCard,
+  FaPercent,
+  FaTimes,
+  FaUser,
+  FaPhoneAlt,
+  FaStickyNote,
+  FaReceipt,
+  FaRupeeSign,
+  FaTag,
+  FaExchangeAlt,
+  FaExclamationTriangle,
+  FaEraser,
+  FaWallet,
+  FaBookmark,
+  FaUndo,
 } from 'react-icons/fa';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import UpiQrModal from '../../components/common/UpiQrModal';
+import { printInvoice } from '../../utils/printInvoice';
 
 const paymentMethods = [
   { key: 'Cash', label: 'Cash', icon: <FaMoneyBillWave />, color: '#2e7d32' },
@@ -24,106 +39,237 @@ const paymentMethods = [
   { key: 'Others', label: 'Others', icon: <FaCreditCard />, color: '#6a1b9a' },
 ];
 
-// Inline styles me media query nahi chalti, isliye responsive CSS yahan classes me hai
-const responsiveCss = `
-  .bl-page { padding: 16px 20px; }
-  .bl-head h1 { color: #1a237e; font-weight: 800; font-size: 22px; margin: 0 0 2px; }
-  .bl-head p { color: #666; font-weight: 500; font-size: 12px; margin: 0; }
-  .bl-head { margin-bottom: 14px; }
+const POS_CART_KEY = 'pos_cart';
 
-  .bl-layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
-  .bl-col { min-width: 0; }
+// ============================================================
+// RESPONSIVE STYLES (media queries need real CSS, not inline)
+// ============================================================
+const css = `
+.bl-page{padding:16px;max-width:1400px;margin:0 auto;box-sizing:border-box}
+.bl-page *{box-sizing:border-box}
 
-  .bl-card { background: #fff; padding: 14px; border-radius: 12px; box-shadow: 0 1px 8px rgba(0,0,0,0.06); margin-bottom: 12px; }
-  .bl-card h3 { color: #1a237e; font-weight: 800; font-size: 14px; margin: 0 0 10px; }
+/* Header */
+.bl-header{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.bl-header-icon{width:46px;height:46px;border-radius:12px;background:linear-gradient(135deg,#1a237e,#3949ab);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.bl-header h1{margin:0;color:#1a237e;font-weight:800;font-size:24px;line-height:1.2}
+.bl-header p{margin:2px 0 0;color:#666;font-weight:500;font-size:13px}
+.bl-cart-badge{margin-left:auto;background:#fff3e0;color:#f57c00;border-radius:20px;padding:7px 13px;font-weight:800;font-size:13px;display:flex;align-items:center;gap:6px;flex-shrink:0}
 
-  .bl-toast { position: fixed; top: 80px; right: 20px; color: #fff; padding: 12px 20px; border-radius: 8px; font-weight: 700; font-size: 14px; z-index: 3000; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+/* Layout */
+.bl-grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(330px,1fr);gap:20px;align-items:start}
 
-  .bl-input { min-width: 0; }
-  .bl-input:focus { border-color: #1a237e !important; }
+/* Cards */
+.bl-card{background:#fff;border-radius:14px;box-shadow:0 2px 12px rgba(26,35,126,.07);padding:18px;margin-bottom:14px}
+.bl-card-title{display:flex;align-items:center;gap:8px;color:#1a237e;font-weight:800;font-size:15px;margin:0 0 14px}
+.bl-card-title small{color:#999;font-weight:500;font-size:11px}
 
-  /* Cart items */
-  .bl-item { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; }
-  .bl-item:last-child { border-bottom: none; }
-  .bl-item-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-  .bl-item-name { flex: 1; min-width: 0; margin: 0; font-size: 13px; font-weight: 700; color: #1a237e; word-break: break-word; }
-  .bl-item-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .bl-mini { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; color: #888; }
-  .bl-num { width: 68px; padding: 5px 6px; border: 1.5px solid #ddd; border-radius: 6px; font-size: 13px; font-weight: 600; text-align: right; outline: none; box-sizing: border-box; }
-  .bl-price-fixed { font-size: 13px; font-weight: 700; color: #333; }
-  .bl-item-total { margin-left: auto; font-size: 15px; font-weight: 800; color: #f57c00; }
-  .bl-qty { display: inline-flex; align-items: center; border: 1.5px solid #ddd; border-radius: 6px; overflow: hidden; }
-  .bl-qty button { background: #f5f5f5; border: none; width: 30px; height: 30px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-  .bl-qty span { min-width: 30px; text-align: center; font-weight: 700; font-size: 13px; }
-  .bl-del { background: #ffebee; color: #c62828; border: none; width: 30px; height: 30px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+/* Inputs */
+.bl-input-wrap{position:relative;width:100%}
+.bl-input-wrap > svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:#9aa0b5;font-size:13px;pointer-events:none}
+.bl-input{width:100%;padding:12px 14px;border:1.5px solid #dde1ee;border-radius:10px;font-size:14px;font-weight:500;outline:none;font-family:inherit;background:#fff;color:#333;transition:border-color .15s,box-shadow .15s}
+.bl-input.has-icon{padding-left:37px}
+.bl-input:focus{border-color:#1a237e;box-shadow:0 0 0 3px rgba(26,35,126,.12)}
+.bl-input.orange{border-color:#f57c00;color:#f57c00;font-weight:700}
+.bl-stack{display:flex;flex-direction:column;gap:10px}
+.bl-label{display:flex;align-items:center;gap:5px;font-size:12px;color:#1a237e;font-weight:700;margin-bottom:6px}
 
-  .bl-two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .bl-pay-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+/* Search */
+.bl-search-box{position:relative;margin-bottom:12px}
+.bl-search-bar{display:flex;align-items:center;gap:10px;background:#fff;border-radius:12px;padding:4px 14px;border:2px solid #e0e4f2;box-shadow:0 2px 10px rgba(0,0,0,.04);transition:border-color .15s}
+.bl-search-bar:focus-within{border-color:#1a237e}
+.bl-search-bar svg{color:#1a237e;flex-shrink:0}
+.bl-search-bar input{flex:1;border:none;outline:none;font-size:15px;font-weight:500;color:#333;padding:12px 0;min-width:0;background:transparent;font-family:inherit}
+.bl-clear-x{background:#f0f1f7;border:none;color:#777;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;padding:0}
+.bl-dropdown{position:absolute;top:100%;left:0;right:0;background:#fff;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.18);margin-top:6px;max-height:min(400px,60vh);overflow-y:auto;z-index:100;border:1px solid #e0e0e0}
+.bl-dd-msg{padding:22px;text-align:center;color:#666;font-weight:600;font-size:14px}
+.bl-dd-item{display:flex;align-items:center;gap:12px;padding:11px 14px;cursor:pointer;border-bottom:1px solid #f0f0f0;min-height:60px}
+.bl-dd-item:last-child{border-bottom:none}
+.bl-dd-item:hover,.bl-dd-item:active{background:#e8eaf6}
+.bl-dd-img{width:40px;height:54px;object-fit:cover;border-radius:6px;flex-shrink:0;background:#eee}
+.bl-dd-ph{width:40px;height:54px;border-radius:6px;background:#fff3e0;color:#f57c00;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.bl-dd-info{flex:1;min-width:0}
+.bl-dd-title{margin:0;font-size:14px;font-weight:700;color:#1a237e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bl-dd-sub{margin:2px 0 0;font-size:12px;color:#666;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bl-dd-price{font-size:15px;font-weight:800;color:#f57c00;flex-shrink:0}
+.bl-tag{background:#fff3e0;color:#f57c00;padding:2px 7px;border-radius:8px;font-size:9px;font-weight:800;letter-spacing:.3px;flex-shrink:0}
 
-  .bl-actions { display: flex; flex-direction: column; gap: 10px; }
-  .bl-bar-total { display: none; }
-  .bl-lbl-sm { display: none; }
+/* Add custom button */
+.bl-add-custom{width:100%;background:#fff;border:2px dashed #1a237e;color:#1a237e;padding:13px;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:14px;font-family:inherit;transition:background .15s}
+.bl-add-custom:hover,.bl-add-custom:active{background:#e8eaf6}
 
-  /* Tablet & mobile: ek column */
-  @media (max-width: 900px) {
-    .bl-layout { grid-template-columns: minmax(0, 1fr); gap: 0; }
-    .bl-page { padding: 12px 12px 96px; }
-    .bl-toast { top: 64px; left: 12px; right: 12px; text-align: center; }
+/* Cart */
+.bl-cart-search{display:flex;align-items:center;gap:8px;background:#f6f7fb;border-radius:10px;padding:2px 12px;border:1.5px solid #e3e6f1;margin-bottom:12px}
+.bl-cart-search svg{color:#999;font-size:13px;flex-shrink:0}
+.bl-cart-search input{flex:1;border:none;background:transparent;outline:none;font-size:14px;font-weight:500;color:#333;padding:10px 0;min-width:0;font-family:inherit}
+.bl-cart-wrap{background:#fff;border-radius:14px;box-shadow:0 2px 12px rgba(26,35,126,.07);overflow:hidden;margin-bottom:14px}
+.bl-empty{padding:50px 20px;text-align:center;color:#999}
+.bl-empty svg{font-size:42px;color:#d6d9e8;margin-bottom:12px}
+.bl-empty p{margin:0;font-weight:600;font-size:14px}
 
-    /* Sticky bottom bar: total + save buttons hamesha dikhte hain */
-    .bl-actions {
-      position: fixed; left: 0; right: 0; bottom: 0; z-index: 1000;
-      flex-direction: row; align-items: center; gap: 8px;
-      background: #fff; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
-      box-shadow: 0 -4px 16px rgba(0,0,0,0.12);
-    }
-    .bl-bar-total { display: block; line-height: 1.15; padding-right: 4px; }
-    .bl-bar-total small { display: block; font-size: 10px; font-weight: 700; color: #888; }
-    .bl-bar-total strong { font-size: 18px; font-weight: 800; color: #f57c00; }
-    .bl-actions button { flex: 1; padding: 12px 8px !important; font-size: 14px !important; min-height: 46px; }
-    .bl-lbl-lg { display: none; }
-    .bl-lbl-sm { display: inline; }
-  }
+.bl-table-scroll{overflow-x:auto}
+.bl-table{width:100%;border-collapse:collapse}
+.bl-table th{padding:12px 14px;text-align:left;font-size:11px;font-weight:700;color:#1a237e;text-transform:uppercase;letter-spacing:.5px;background:#f5f6fb}
+.bl-table td{padding:12px 14px;font-size:13px;font-weight:500;color:#333;vertical-align:middle;border-bottom:1px solid #f0f0f5}
+.bl-table .r{text-align:right}.bl-table .c{text-align:center}
+.bl-name-cell{display:flex;align-items:center;gap:8px;font-weight:700;color:#1a237e;font-size:13px}
+.bl-mini-input{width:70px;padding:6px 8px;border:1.5px solid #dde1ee;border-radius:6px;font-size:13px;font-weight:600;text-align:right;outline:none;font-family:inherit}
+.bl-mini-input:focus{border-color:#1a237e}
 
-  @media (max-width: 600px) {
-    .bl-head h1 { font-size: 19px; }
-    .bl-card { padding: 12px; border-radius: 10px; margin-bottom: 10px; }
-    /* 16px se iOS input focus pe zoom nahi karta */
-    .bl-input, .bl-num { font-size: 16px !important; }
-    .bl-num { width: 64px; }
-    .bl-qty button { width: 34px; height: 34px; }
-    .bl-del { width: 34px; height: 34px; }
-    .bl-item-row { gap: 8px; }
-  }
+.bl-qty{display:inline-flex;align-items:center;border:1.5px solid #dde1ee;border-radius:8px;overflow:hidden;background:#fff}
+.bl-qty button{background:#f3f4fa;border:none;width:32px;height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#1a237e;padding:0}
+.bl-qty button:active{background:#dfe2f3}
+.bl-qty span{min-width:34px;text-align:center;font-weight:800;font-size:14px}
+
+.bl-icon-btn{border:none;border-radius:8px;width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;padding:0;flex-shrink:0}
+.bl-icon-btn.danger{background:#ffebee;color:#c62828}
+
+/* Mobile item cards (hidden on desktop) */
+.bl-cards{display:none;padding:10px}
+.bl-item{border:1.5px solid #eceef7;border-radius:12px;padding:12px;margin-bottom:10px;background:#fff}
+.bl-item:last-child{margin-bottom:0}
+.bl-item-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px}
+.bl-item-name{font-weight:700;color:#1a237e;font-size:14px;line-height:1.35;display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0;word-break:break-word}
+.bl-item-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:end}
+.bl-item-grid label{display:block;font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+.bl-item-grid .bl-input{padding:9px 10px;font-size:14px}
+.bl-item-price{font-weight:700;font-size:15px;color:#333;padding:9px 0}
+.bl-item-foot{display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:10px;border-top:1px dashed #e3e6f1}
+.bl-item-foot span{font-size:12px;font-weight:600;color:#666}
+.bl-item-foot b{font-size:17px;font-weight:800;color:#f57c00}
+.bl-stock{font-size:10px;color:#888;font-weight:600}
+
+/* Payment */
+.bl-pm-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.bl-pm{padding:12px 6px;border:2px solid #dde1ee;background:#fff;color:#666;border-radius:12px;font-weight:700;font-size:12px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-family:inherit;transition:all .15s}
+.bl-pm svg{font-size:18px}
+.bl-pm.active{background:var(--pm);border-color:var(--pm);color:#fff;box-shadow:0 4px 12px rgba(0,0,0,.18)}
+
+.bl-upi{padding:15px;border-radius:14px;margin-bottom:14px;border:2px solid #f57c00;background:#fff3e0}
+.bl-upi.ok{border-color:#2e7d32;background:#e8f5e9}
+.bl-upi-ok{display:flex;align-items:center;gap:8px;color:#2e7d32;font-weight:700;font-size:13px;flex-wrap:wrap}
+.bl-link-btn{margin-left:auto;background:transparent;border:none;color:#2e7d32;cursor:pointer;font-size:12px;font-weight:700;display:flex;align-items:center;gap:4px;font-family:inherit}
+.bl-upi p{margin:0 0 10px;font-size:13px;color:#e65100;font-weight:700;display:flex;align-items:center;gap:6px}
+.bl-primary-btn{width:100%;background:#1a237e;color:#fff;border:none;padding:13px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;font-family:inherit}
+
+.bl-cash{border:2px solid #2e7d32}
+.bl-cash .bl-card-title{color:#2e7d32}
+.bl-cash-input{width:100%;padding:12px 15px;border:2px solid #2e7d32;border-radius:10px;font-size:20px;font-weight:800;color:#2e7d32;outline:none;text-align:right;background:#e8f5e9;margin-bottom:12px;font-family:inherit}
+.bl-chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:12px;-webkit-overflow-scrolling:touch}
+.bl-chip{padding:8px 14px;background:#e8f5e9;color:#2e7d32;border:1.5px solid #2e7d32;border-radius:20px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:5px;font-family:inherit;flex-shrink:0}
+.bl-chip.solid{background:#1a237e;border-color:#1a237e;color:#fff}
+.bl-chip.grey{background:#f3f4fa;border-color:#dde1ee;color:#666}
+.bl-note{padding:14px;border-radius:12px;display:flex;justify-content:space-between;align-items:center;gap:10px;border-left:4px solid}
+.bl-note.green{background:#e8f5e9;border-color:#2e7d32}
+.bl-note.red{background:#ffebee;border-color:#c62828}
+.bl-note h4{margin:0;font-size:11px;font-weight:800;text-transform:uppercase;display:flex;align-items:center;gap:5px}
+.bl-note.green h4{color:#2e7d32}.bl-note.red h4{color:#c62828}
+.bl-note small{color:#666;font-size:11px;font-weight:500}
+.bl-note .amt{font-size:28px;font-weight:800;white-space:nowrap}
+.bl-note.green .amt{color:#2e7d32}.bl-note.red .amt{color:#c62828}
+.bl-exact{background:#e8f5e9;padding:14px;border-radius:12px;text-align:center;border-left:4px solid #2e7d32;color:#2e7d32;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;gap:8px}
+
+/* Summary */
+.bl-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;font-size:13px;font-weight:600}
+.bl-row span:first-child{color:#666}
+.bl-discount{color:#2e7d32;background:#e8f5e9;padding:7px 10px;border-radius:8px;font-weight:700}
+.bl-discount span:first-child{color:#2e7d32;display:flex;align-items:center;gap:6px}
+.bl-total{border-top:2px solid #eee;padding-top:14px;margin-top:6px;display:flex;justify-content:space-between;align-items:center}
+.bl-total span:first-child{color:#1a237e;font-weight:800;font-size:15px}
+.bl-total span:last-child{color:#f57c00;font-weight:800;font-size:26px}
+
+/* Buttons */
+.bl-actions{display:flex;flex-direction:column;gap:10px}
+.bl-btn{border:none;padding:14px;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;color:#fff;font-family:inherit}
+.bl-btn.blue{background:#1a237e}.bl-btn.orange{background:#f57c00}
+.bl-btn:disabled{background:#999;cursor:not-allowed}
+
+/* Sticky mobile bar */
+.bl-sticky{display:none;position:fixed;left:0;right:0;bottom:0;background:#fff;box-shadow:0 -4px 20px rgba(0,0,0,.14);padding:10px 14px calc(10px + env(safe-area-inset-bottom));z-index:900;align-items:center;gap:10px}
+.bl-sticky-total{display:flex;flex-direction:column;line-height:1.15;min-width:0}
+.bl-sticky-total small{font-size:11px;color:#777;font-weight:600}
+.bl-sticky-total b{font-size:21px;color:#f57c00;font-weight:800}
+.bl-sticky .bl-btn{padding:12px 14px;font-size:14px;border-radius:10px}
+.bl-sticky-btns{display:flex;gap:8px;margin-left:auto}
+
+/* Toast */
+.bl-toast{position:fixed;top:80px;right:20px;color:#fff;padding:13px 20px;border-radius:10px;font-weight:700;z-index:3000;box-shadow:0 6px 20px rgba(0,0,0,.25);display:flex;align-items:center;gap:8px;max-width:calc(100vw - 40px);font-size:14px}
+.bl-toast.ok{background:#2e7d32}.bl-toast.err{background:#c62828}
+
+/* Modal */
+.bl-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:2500;padding:20px}
+.bl-modal{background:#fff;border-radius:16px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.bl-modal h2{color:#1a237e;font-weight:800;font-size:19px;margin:0 0 18px;display:flex;align-items:center;gap:8px}
+.bl-modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.bl-save-lib{display:flex;align-items:center;gap:10px;background:#e8f5e9;padding:12px;border-radius:10px;border:1.5px solid #2e7d32;cursor:pointer}
+.bl-save-lib input{width:20px;height:20px;cursor:pointer;flex-shrink:0}
+.bl-save-lib p{margin:0;font-weight:700;color:#2e7d32;font-size:13px;display:flex;align-items:center;gap:6px}
+.bl-save-lib small{color:#666;font-size:11px;font-weight:500}
+.bl-preview{background:#fff8e1;padding:12px;border-radius:10px;display:flex;justify-content:space-between;align-items:center;border-left:4px solid #f57c00}
+.bl-preview span:first-child{font-size:13px;font-weight:700;color:#666}
+.bl-preview span:last-child{font-size:20px;font-weight:800;color:#f57c00}
+.bl-modal-btns{display:flex;gap:10px;margin-top:4px}
+.bl-modal-btns button{padding:13px;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px}
+.bl-modal-btns .cancel{flex:1;background:#f3f4fa;color:#666}
+.bl-modal-btns .add{flex:2;background:#1a237e;color:#fff}
+
+@keyframes bl-slide{from{transform:translateY(100%)}to{transform:translateY(0)}}
+
+/* ============ TABLET & MOBILE ============ */
+@media (max-width:900px){
+  .bl-grid{grid-template-columns:1fr}
+  .bl-page{padding:12px 12px 100px}
+  .bl-desktop-actions{display:none}
+  .bl-sticky{display:flex}
+}
+
+/* ============ PHONE ============ */
+@media (max-width:640px){
+  .bl-header h1{font-size:20px}
+  .bl-header-icon{width:40px;height:40px;font-size:17px}
+  .bl-card{padding:15px;border-radius:12px}
+  .bl-table-scroll{display:none}
+  .bl-cards{display:block}
+  .bl-input,.bl-cash-input,.bl-cart-search input,.bl-search-bar input{font-size:16px} /* stops iOS zoom */
+  .bl-toast{top:70px;left:12px;right:12px;max-width:none;justify-content:center}
+  .bl-overlay{align-items:flex-end;padding:0}
+  .bl-modal{max-width:none;border-radius:20px 20px 0 0;max-height:92vh;padding:20px 18px calc(20px + env(safe-area-inset-bottom));animation:bl-slide .25s ease-out}
+  .bl-note .amt{font-size:24px}
+}
 `;
 
 const Billing = () => {
   const { user } = useAuth();
 
-  // Search
+  // Product search
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const searchRef = useRef(null);
+
+  // Cart search
+  const [cartSearch, setCartSearch] = useState('');
 
   // Cart
   const [cart, setCart] = useState([]);
 
   // Manual Item Modal
   const [showManualModal, setShowManualModal] = useState(false);
-  const [manualItem, setManualItem] = useState({ name: '', price: '', quantity: 1 });
+  const [manualItem, setManualItem] = useState({
+    name: '',
+    price: '',
+    quantity: 1,
+    discountPercent: 0,
+    saveToLibrary: false,
+  });
 
   // Customer
   const [customer, setCustomer] = useState({ name: '', phone: '' });
 
   // Payment
   const [paymentMethod, setPaymentMethod] = useState('Cash');
-  const [discountAmount, setDiscountAmount] = useState(0);
   const [taxAmount, setTaxAmount] = useState(0);
   const [notes, setNotes] = useState('');
   const [paidAmount, setPaidAmount] = useState('');
-
-  // Custom amount for UPI QR
   const [customAmount, setCustomAmount] = useState('');
 
   // Processing
@@ -135,7 +281,9 @@ const Billing = () => {
   const [showUpiModal, setShowUpiModal] = useState(false);
   const [upiConfirmed, setUpiConfirmed] = useState(false);
 
-  // ===== Search Products =====
+  // ============================================================
+  // SEARCH PRODUCTS (Books + Custom Items dono)
+  // ============================================================
   useEffect(() => {
     const search = async () => {
       if (searchTerm.trim().length < 2) {
@@ -144,10 +292,40 @@ const Billing = () => {
       }
       try {
         setSearching(true);
-        const { data } = await api.get(`/books/suggestions?q=${encodeURIComponent(searchTerm.trim())}`);
-        setSearchResults(data.books || []);
+
+        const [booksRes, customRes] = await Promise.all([
+          api
+            .get(`/books/suggestions?q=${encodeURIComponent(searchTerm.trim())}`)
+            .catch(() => ({ data: { books: [] } })),
+          api
+            .get(`/custom-items?search=${encodeURIComponent(searchTerm.trim())}`)
+            .catch(() => ({ data: { items: [] } })),
+        ]);
+
+        const books = (booksRes.data.books || []).map((b) => ({
+          _id: b._id,
+          title: b.title,
+          author: b.author,
+          price: b.price,
+          stock: b.stock,
+          image: b.image,
+          isCustom: false,
+        }));
+
+        const customItems = (customRes.data.items || []).map((i) => ({
+          _id: i._id,
+          title: i.name,
+          author: i.category || 'Custom Item',
+          price: i.price,
+          stock: null,
+          image: null,
+          discountPercent: i.discountPercent || 0,
+          isCustom: true,
+        }));
+
+        setSearchResults([...customItems, ...books]);
       } catch (err) {
-        console.error(err);
+        console.error('Search error:', err);
         setSearchResults([]);
       } finally {
         setSearching(false);
@@ -163,7 +341,6 @@ const Billing = () => {
         setSearchResults([]);
       }
     };
-    // touchstart bhi, taaki mobile par bahar tap karne se dropdown band ho
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('touchstart', handleClickOutside);
     return () => {
@@ -178,44 +355,129 @@ const Billing = () => {
     return () => clearTimeout(t);
   }, [toast]);
 
-  // ===== Add Book =====
-  const addToCart = (book) => {
-    const existing = cart.find((item) => item.book === book._id);
+  // Auto-save cart to localStorage
+  useEffect(() => {
+    try {
+      if (cart.length > 0) {
+        localStorage.setItem(POS_CART_KEY, JSON.stringify(cart));
+      } else {
+        localStorage.removeItem(POS_CART_KEY);
+      }
+    } catch (err) {
+      console.error('POS cart save error:', err);
+    }
+  }, [cart]);
+
+  // ===== Add Book (or custom item from DB) to cart =====
+  const addToCart = (item) => {
+    const key = item._id;
+    const existing = cart.find(
+      (c) => c.book === key || (item.isCustom && c.customItemId === key)
+    );
+
     if (existing) {
-      setCart(cart.map((item) => item.book === book._id ? { ...item, quantity: item.quantity + 1 } : item));
+      setCart(
+        cart.map((c) =>
+          c.book === key || (item.isCustom && c.customItemId === key)
+            ? { ...c, quantity: c.quantity + 1 }
+            : c
+        )
+      );
     } else {
-      setCart([...cart, {
-        book: book._id,
-        name: book.title,
-        price: book.price,
-        quantity: 1,
-        discount: 0,
-        stock: book.stock,
-        isManual: false,
-      }]);
+      setCart([
+        ...cart,
+        {
+          book: item.isCustom ? null : item._id,
+          customItemId: item.isCustom ? item._id : null,
+          name: item.title,
+          price: item.price,
+          quantity: 1,
+          discountPercent: item.discountPercent || 0,
+          discount: item.isCustom
+            ? (item.price * (item.discountPercent || 0)) / 100
+            : 0,
+          stock: item.stock,
+          isManual: item.isCustom,
+        },
+      ]);
     }
     setSearchTerm('');
     setSearchResults([]);
   };
 
-  // ===== Add Manual Item =====
-  const addManualItem = () => {
-    if (!manualItem.name.trim() || !manualItem.price || Number(manualItem.price) <= 0) {
+  // ============================================================
+  // ADD MANUAL ITEM (Ad-hoc + Optional save to library)
+  // ============================================================
+  const addManualItem = async () => {
+    if (
+      !manualItem.name.trim() ||
+      !manualItem.price ||
+      Number(manualItem.price) <= 0
+    ) {
       setToast('⚠️ Item name and price required');
       return;
     }
-    setCart([...cart, {
-      book: null,
-      name: manualItem.name.trim(),
-      price: Number(manualItem.price),
-      quantity: Number(manualItem.quantity) || 1,
-      discount: 0,
-      stock: null,
-      isManual: true,
-    }]);
-    setManualItem({ name: '', price: '', quantity: 1 });
+
+    const price = Number(manualItem.price);
+    const qty = Number(manualItem.quantity) || 1;
+    const percent = Math.min(
+      100,
+      Math.max(0, Number(manualItem.discountPercent) || 0)
+    );
+    const lineTotal = price * qty;
+    const discountAmt = (lineTotal * percent) / 100;
+
+    let customItemId = null;
+
+    if (manualItem.saveToLibrary) {
+      try {
+        const { data } = await api.post('/custom-items', {
+          name: manualItem.name.trim(),
+          price,
+          discountPercent: percent,
+          category: 'Custom',
+        });
+        customItemId = data._id;
+      } catch (err) {
+        if (err.response?.data?.item) {
+          customItemId = err.response.data.item._id;
+        } else {
+          setToast(
+            `⚠️ ${err.response?.data?.message || 'Failed to save to library'}`
+          );
+          return;
+        }
+      }
+    }
+
+    setCart([
+      ...cart,
+      {
+        book: null,
+        customItemId,
+        name: manualItem.name.trim(),
+        price,
+        quantity: qty,
+        discountPercent: percent,
+        discount: Number(discountAmt.toFixed(2)),
+        stock: null,
+        isManual: true,
+      },
+    ]);
+
+    setManualItem({
+      name: '',
+      price: '',
+      quantity: 1,
+      discountPercent: 0,
+      saveToLibrary: false,
+    });
     setShowManualModal(false);
-    setToast('✅ Item added');
+    setToast(
+      manualItem.saveToLibrary
+        ? '✅ Item added to cart + saved to library'
+        : '✅ Custom item added to cart'
+    );
   };
 
   const updateQuantity = (index, newQty) => {
@@ -230,40 +492,72 @@ const Billing = () => {
     setCart(updated);
   };
 
-  const updateItemDiscount = (index, discount) => {
+  const updateItemDiscountPercent = (index, percent) => {
     const updated = [...cart];
-    updated[index] = { ...updated[index], discount: Number(discount) || 0 };
+    const p = Math.min(100, Math.max(0, Number(percent) || 0));
+    const item = updated[index];
+    const lineTotal = item.price * item.quantity;
+    const discountAmt = (lineTotal * p) / 100;
+
+    updated[index] = {
+      ...item,
+      discountPercent: p,
+      discount: Number(discountAmt.toFixed(2)),
+    };
     setCart(updated);
   };
 
   const updateItemPrice = (index, price) => {
     const updated = [...cart];
-    updated[index] = { ...updated[index], price: Number(price) || 0 };
+    const newPrice = Number(price) || 0;
+    const item = updated[index];
+    const lineTotal = newPrice * item.quantity;
+    const discountAmt = (lineTotal * (item.discountPercent || 0)) / 100;
+
+    updated[index] = {
+      ...item,
+      price: newPrice,
+      discount: Number(discountAmt.toFixed(2)),
+    };
     setCart(updated);
   };
 
   const removeItem = (index) => setCart(cart.filter((_, i) => i !== index));
 
   // ===== Calculations =====
-  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity - (item.discount || 0), 0);
-  const totalAmount = subtotal - Number(discountAmount || 0) + Number(taxAmount || 0);
+  const subtotal = cart.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  );
+  const totalDiscount = cart.reduce(
+    (sum, item) => sum + (item.discount || 0),
+    0
+  );
+  const totalAmount = subtotal - totalDiscount + Number(taxAmount || 0);
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const paid = Number(paidAmount) || 0;
   const changeReturn = paid > totalAmount ? paid - totalAmount : 0;
   const dueAmount = paid > 0 && paid < totalAmount ? totalAmount - paid : 0;
 
-  const qrAmount = Number(customAmount) > 0 ? Number(customAmount) : totalAmount;
+  const qrAmount =
+    Number(customAmount) > 0 ? Number(customAmount) : totalAmount;
+
+  const filteredCart = cartSearch
+    ? cart.filter((item) =>
+        item.name.toLowerCase().includes(cartSearch.toLowerCase())
+      )
+    : cart;
 
   // ===== Save Sale =====
   const handleSave = async (printAfter = false) => {
     if (saving) return;
     if (cart.length === 0) {
-      setToast('⚠️ Cart is empty. Please add items first.');
+      setToast('⚠️ Cart is empty');
       return;
     }
     if (paymentMethod === 'UPI' && !upiConfirmed) {
-      setToast('⚠️ Please confirm UPI payment first (Generate QR & Confirm)');
+      setToast('⚠️ Please confirm UPI payment first');
       return;
     }
 
@@ -272,6 +566,7 @@ const Billing = () => {
       const { data } = await api.post('/sales', {
         items: cart.map((item) => ({
           book: item.book || null,
+          customItemId: item.customItemId || null,
           name: item.name,
           price: item.price,
           quantity: item.quantity,
@@ -280,7 +575,8 @@ const Billing = () => {
         })),
         customerName: customer.name || 'Walk-in Customer',
         customerPhone: customer.phone,
-        discountAmount: Number(discountAmount) || 0,
+        discountAmount: 0,
+        discountPercent: 0,
         taxAmount: Number(taxAmount) || 0,
         paymentMethod,
         paymentStatus: 'Paid',
@@ -295,14 +591,15 @@ const Billing = () => {
       if (printAfter) setTimeout(() => handlePrint(data), 300);
 
       setCart([]);
+      localStorage.removeItem(POS_CART_KEY);
       setCustomer({ name: '', phone: '' });
-      setDiscountAmount(0);
       setTaxAmount(0);
       setNotes('');
       setPaymentMethod('Cash');
       setPaidAmount('');
       setCustomAmount('');
       setUpiConfirmed(false);
+      setCartSearch('');
     } catch (err) {
       setToast(`⚠️ ${err.response?.data?.message || 'Failed to save'}`);
     } finally {
@@ -310,172 +607,130 @@ const Billing = () => {
     }
   };
 
-  // ===== Print =====
+  // ===== Print (paper-roll receipt, shared with Sales page) =====
   const handlePrint = (sale) => {
     const s = sale || lastSale;
     if (!s) return;
-    const printWindow = window.open('', '_blank', 'width=800,height=600');
-    if (!printWindow) {
-      setToast('⚠️ Popup blocked. Allow popups to print.');
-      return;
-    }
-
-    const formatDate = (date) =>
-      new Date(date).toLocaleString('en-IN', {
-        day: '2-digit', month: 'short', year: 'numeric',
-        hour: '2-digit', minute: '2-digit',
-      });
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Invoice - ${s.invoiceNumber}</title>
-        <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: 'Courier New', monospace; padding: 20px; max-width: 400px; margin: 0 auto; color: #000; }
-          .header { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 15px; margin-bottom: 15px; }
-          .header h1 { font-size: 22px; font-weight: 900; margin-bottom: 5px; }
-          .header p { font-size: 12px; line-height: 1.4; }
-          .info { margin-bottom: 15px; font-size: 12px; line-height: 1.6; border-bottom: 1px dashed #000; padding-bottom: 10px; }
-          .info-row { display: flex; justify-content: space-between; }
-          table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 15px; }
-          th { text-align: left; border-bottom: 2px solid #000; padding: 8px 0; }
-          th:last-child, td:last-child { text-align: right; }
-          td { padding: 6px 0; border-bottom: 1px dashed #eee; }
-          .totals { border-top: 2px dashed #000; padding-top: 10px; font-size: 12px; }
-          .totals-row { display: flex; justify-content: space-between; padding: 4px 0; }
-          .grand-total { font-size: 16px; font-weight: 900; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 10px 0; margin-top: 5px; }
-          .footer { text-align: center; margin-top: 20px; padding-top: 15px; border-top: 2px dashed #000; font-size: 11px; }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h1>YADAV SHREE</h1>
-          <p><strong>BOOK STORE</strong></p>
-          <p>Raipur, Chhattisgarh - 492001</p>
-          <p>📞 +91 98765 43210</p>
-        </div>
-        <div class="info">
-          <div class="info-row"><span><strong>Invoice:</strong> ${s.invoiceNumber}</span></div>
-          <div class="info-row"><span><strong>Date:</strong> ${formatDate(s.createdAt)}</span></div>
-          <div class="info-row"><span><strong>Customer:</strong> ${s.customerName}</span></div>
-          ${s.customerPhone ? `<div class="info-row"><span><strong>Phone:</strong> ${s.customerPhone}</span></div>` : ''}
-          <div class="info-row"><span><strong>Payment:</strong> ${s.paymentMethod}</span></div>
-        </div>
-        <table>
-          <thead><tr><th>Item</th><th>Qty</th><th>Rate</th><th>Amt</th></tr></thead>
-          <tbody>
-            ${s.items.map((item) => `
-              <tr>
-                <td>${item.name}</td>
-                <td>${item.quantity}</td>
-                <td>₹${item.price}</td>
-                <td>₹${(item.price * item.quantity - (item.discount || 0)).toFixed(2)}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-        <div class="totals">
-          <div class="totals-row"><span>Subtotal:</span><span>₹${s.subtotal.toFixed(2)}</span></div>
-          ${s.discountAmount > 0 ? `<div class="totals-row"><span>Discount:</span><span>-₹${s.discountAmount.toFixed(2)}</span></div>` : ''}
-          ${s.taxAmount > 0 ? `<div class="totals-row"><span>Tax:</span><span>+₹${s.taxAmount.toFixed(2)}</span></div>` : ''}
-          <div class="totals-row grand-total"><span>TOTAL:</span><span>₹${s.totalAmount.toFixed(2)}</span></div>
-          ${s.paymentMethod === 'Cash' ? `
-            <div class="totals-row" style="margin-top:8px;border-top:1px dashed #000;padding-top:8px;">
-              <span>Paid:</span><span>₹${(s.paidAmount || s.totalAmount).toFixed(2)}</span>
-            </div>
-            ${(s.changeReturn || 0) > 0 ? `<div class="totals-row"><span>Change:</span><span>₹${s.changeReturn.toFixed(2)}</span></div>` : ''}
-          ` : ''}
-        </div>
-        <div class="footer">
-          <p><strong>Thank you for shopping!</strong></p>
-          <p>Visit again 🙏</p>
-          <p style="font-size:10px;margin-top:10px;">*** Computer generated invoice ***</p>
-        </div>
-        <script>window.onload = function() { window.print(); setTimeout(() => window.close(), 500); };</script>
-      </body>
-      </html>
-    `);
-    printWindow.document.close();
+    printInvoice(s, (msg) => setToast(`⚠️ ${msg}`));
   };
+
+  // ===== Small render helpers =====
+  const isErrorToast = toast.includes('⚠️');
+  const toastText = toast.replace(/^(⚠️|✅)\s*/, '');
+
+  const renderActionButtons = () => (
+    <div className="bl-actions">
+      <button
+        className="bl-btn blue"
+        onClick={() => handleSave(false)}
+        disabled={saving}
+      >
+        <FaSave /> {saving ? 'Saving...' : 'Save Bill'}
+      </button>
+      <button
+        className="bl-btn orange"
+        onClick={() => handleSave(true)}
+        disabled={saving}
+      >
+        <FaPrint /> Save & Print
+      </button>
+    </div>
+  );
 
   return (
     <div className="bl-page">
-      <style>{responsiveCss}</style>
+      <style>{css}</style>
 
+      {/* Toast */}
       {toast && (
-        <div className="bl-toast" style={{ background: toast.includes('⚠️') ? '#c62828' : '#2e7d32' }}>
-          {toast}
+        <div className={`bl-toast ${isErrorToast ? 'err' : 'ok'}`}>
+          {isErrorToast ? <FaExclamationTriangle /> : <FaCheckCircle />}
+          {toastText}
         </div>
       )}
 
-      <div className="bl-head">
-        <h1>🧾 Billing / POS</h1>
-        <p>Create a new sale and print invoice</p>
+      {/* Header */}
+      <div className="bl-header">
+        <div className="bl-header-icon">
+          <FaReceipt />
+        </div>
+        <div>
+          <h1>Billing / POS</h1>
+          <p>Create a new sale and print invoice</p>
+        </div>
+        {totalItems > 0 && (
+          <div className="bl-cart-badge">
+            <FaShoppingCart /> {totalItems}
+          </div>
+        )}
       </div>
 
-      <div className="bl-layout">
-        {/* ===== LEFT ===== */}
-        <div className="bl-col">
+      <div className="bl-grid">
+        {/* ===================== LEFT ===================== */}
+        <div>
           {/* Search */}
-          <div ref={searchRef} style={{ position: 'relative', marginBottom: '10px' }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', background: '#fff',
-              borderRadius: '10px', padding: '4px 14px',
-              border: '2px solid #e0e0e0', boxShadow: '0 1px 8px rgba(0,0,0,0.05)',
-            }}>
-              <FaSearch style={{ color: '#1a237e', marginRight: '10px', flexShrink: 0 }} />
+          <div ref={searchRef} className="bl-search-box">
+            <div className="bl-search-bar">
+              <FaSearch />
               <input
-                className="bl-input"
                 type="text"
-                placeholder="Search book by title or author..."
+                placeholder="Search books or saved items..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                style={{ flex: 1, border: 'none', outline: 'none', fontSize: '15px', fontWeight: 500, color: '#333', padding: '10px 0', background: 'transparent' }}
+                autoFocus
               />
+              {searchTerm && (
+                <button
+                  type="button"
+                  className="bl-clear-x"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setSearchResults([]);
+                  }}
+                >
+                  <FaTimes size={11} />
+                </button>
+              )}
             </div>
 
             {searchTerm.length >= 2 && (
-              <div style={{
-                position: 'absolute', top: '100%', left: 0, right: 0,
-                background: '#fff', borderRadius: '10px',
-                boxShadow: '0 10px 40px rgba(0,0,0,0.15)', marginTop: '5px',
-                maxHeight: '55vh', overflowY: 'auto', zIndex: 100,
-                border: '1px solid #e0e0e0',
-              }}>
+              <div className="bl-dropdown">
                 {searching ? (
-                  <div style={{ padding: '16px', textAlign: 'center', color: '#666', fontWeight: 600, fontSize: '13px' }}>Searching...</div>
+                  <div className="bl-dd-msg">Searching...</div>
                 ) : searchResults.length === 0 ? (
-                  <div style={{ padding: '16px', textAlign: 'center', color: '#666', fontWeight: 500, fontSize: '13px' }}>No books found</div>
+                  <div className="bl-dd-msg">No items found</div>
                 ) : (
-                  searchResults.map((book) => (
+                  searchResults.map((item) => (
                     <div
-                      key={book._id}
-                      onClick={() => addToCart(book)}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: '10px',
-                        padding: '10px 12px', cursor: 'pointer',
-                        borderBottom: '1px solid #f0f0f0',
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = '#e8eaf6')}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = '#fff')}
+                      key={(item.isCustom ? 'c-' : 'b-') + item._id}
+                      className="bl-dd-item"
+                      onClick={() => addToCart(item)}
                     >
-                      <img
-                        src={book.image}
-                        alt={book.title}
-                        style={{ width: '34px', height: '46px', objectFit: 'cover', borderRadius: '5px', flexShrink: 0 }}
-                        onError={(e) => (e.target.src = 'https://via.placeholder.com/40x55')}
-                      />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontSize: '13px', fontWeight: 700, color: '#1a237e', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {book.title}
+                      {item.isCustom ? (
+                        <div className="bl-dd-ph">
+                          <FaBox />
+                        </div>
+                      ) : (
+                        <img
+                          className="bl-dd-img"
+                          src={item.image}
+                          alt={item.title}
+                          onError={(e) =>
+                            (e.target.src = 'https://via.placeholder.com/40x55')
+                          }
+                        />
+                      )}
+                      <div className="bl-dd-info">
+                        <p className="bl-dd-title">
+                          {item.title}{' '}
+                          {item.isCustom && <span className="bl-tag">CUSTOM</span>}
                         </p>
-                        <p style={{ fontSize: '11px', color: '#666', fontWeight: 500, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {book.author} • Stock: {book.stock}
+                        <p className="bl-dd-sub">
+                          {item.author}
+                          {item.stock !== null && ` • Stock: ${item.stock}`}
                         </p>
                       </div>
-                      <div style={{ fontSize: '14px', fontWeight: 800, color: '#f57c00', flexShrink: 0 }}>₹{book.price}</div>
+                      <div className="bl-dd-price">₹{item.price}</div>
                     </div>
                   ))
                 )}
@@ -485,200 +740,351 @@ const Billing = () => {
 
           {/* Add Custom Item */}
           <button
+            className="bl-add-custom"
             onClick={() => setShowManualModal(true)}
-            style={{
-              width: '100%', background: '#fff', border: '2px dashed #1a237e',
-              color: '#1a237e', padding: '10px', borderRadius: '10px',
-              fontSize: '13px', fontWeight: 700, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              gap: '8px', marginBottom: '12px',
-            }}
           >
             <FaPlus /> Add Custom Item (not in store)
           </button>
 
-          {/* Cart */}
-          <div className="bl-card" style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{ background: '#f5f5f5', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '12px', fontWeight: 800, color: '#1a237e' }}>CART</span>
-              <span style={{ fontSize: '12px', fontWeight: 700, color: '#666' }}>{totalItems} item{totalItems !== 1 ? 's' : ''}</span>
+          {/* Cart Search */}
+          {cart.length > 3 && (
+            <div className="bl-cart-search">
+              <FaSearch />
+              <input
+                type="text"
+                placeholder="Search in cart..."
+                value={cartSearch}
+                onChange={(e) => setCartSearch(e.target.value)}
+              />
+              {cartSearch && (
+                <button
+                  type="button"
+                  className="bl-clear-x"
+                  onClick={() => setCartSearch('')}
+                >
+                  <FaTimes size={11} />
+                </button>
+              )}
             </div>
+          )}
 
+          {/* Cart */}
+          <div className="bl-cart-wrap">
             {cart.length === 0 ? (
-              <div style={{ padding: '36px 20px', textAlign: 'center', color: '#999' }}>
-                <FaShoppingCart style={{ fontSize: '32px', marginBottom: '10px', color: '#ddd' }} />
-                <p style={{ fontWeight: 600, fontSize: '13px', margin: 0 }}>Cart is empty. Search a book to add.</p>
+              <div className="bl-empty">
+                <FaShoppingCart />
+                <p>Cart is empty. Search a book or add a custom item.</p>
+              </div>
+            ) : filteredCart.length === 0 ? (
+              <div className="bl-empty">
+                <p>No items match "{cartSearch}"</p>
               </div>
             ) : (
-              cart.map((item, index) => {
-                const itemTotal = item.price * item.quantity - (item.discount || 0);
-                return (
-                  <div key={index} className="bl-item">
-                    <div className="bl-item-top">
-                      {item.isManual && (
-                        <span style={{ background: '#fff3e0', color: '#f57c00', padding: '2px 7px', borderRadius: '10px', fontSize: '10px', fontWeight: 700, flexShrink: 0 }}>
-                          CUSTOM
-                        </span>
-                      )}
-                      <p className="bl-item-name">{item.name}</p>
-                      <button className="bl-del" onClick={() => removeItem(index)} aria-label="Remove item">
-                        <FaTrash size={12} />
-                      </button>
-                    </div>
+              <>
+                {/* ---- Desktop / tablet table ---- */}
+                <div className="bl-table-scroll">
+                  <table className="bl-table">
+                    <thead>
+                      <tr>
+                        <th>Item</th>
+                        <th className="c">Qty</th>
+                        <th className="r">Price</th>
+                        <th className="r">Disc %</th>
+                        <th className="r">Total</th>
+                        <th className="c"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredCart.map((item) => {
+                        const realIndex = cart.indexOf(item);
+                        const itemTotal =
+                          item.price * item.quantity - (item.discount || 0);
+                        return (
+                          <tr key={realIndex}>
+                            <td>
+                              <div className="bl-name-cell">
+                                {item.isManual && (
+                                  <span className="bl-tag">CUSTOM</span>
+                                )}
+                                {item.name}
+                              </div>
+                            </td>
+                            <td className="c">
+                              <div className="bl-qty">
+                                <button
+                                  onClick={() =>
+                                    updateQuantity(realIndex, item.quantity - 1)
+                                  }
+                                >
+                                  <FaMinus size={9} />
+                                </button>
+                                <span>{item.quantity}</span>
+                                <button
+                                  onClick={() =>
+                                    updateQuantity(realIndex, item.quantity + 1)
+                                  }
+                                >
+                                  <FaPlus size={9} />
+                                </button>
+                              </div>
+                            </td>
+                            <td className="r" style={{ fontWeight: 600 }}>
+                              {item.isManual ? (
+                                <input
+                                  type="number"
+                                  className="bl-mini-input"
+                                  value={item.price}
+                                  min="0"
+                                  onChange={(e) =>
+                                    updateItemPrice(realIndex, e.target.value)
+                                  }
+                                />
+                              ) : (
+                                `₹${item.price}`
+                              )}
+                            </td>
+                            <td className="r">
+                              <input
+                                type="number"
+                                className="bl-mini-input"
+                                style={{ width: '60px' }}
+                                value={item.discountPercent || 0}
+                                min="0"
+                                max="100"
+                                onChange={(e) =>
+                                  updateItemDiscountPercent(
+                                    realIndex,
+                                    e.target.value
+                                  )
+                                }
+                              />
+                            </td>
+                            <td
+                              className="r"
+                              style={{ fontWeight: 800, color: '#f57c00' }}
+                            >
+                              ₹{itemTotal.toFixed(0)}
+                            </td>
+                            <td className="c">
+                              <button
+                                className="bl-icon-btn danger"
+                                onClick={() => removeItem(realIndex)}
+                                title="Remove"
+                              >
+                                <FaTrash />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
 
-                    <div className="bl-item-row">
-                      <div className="bl-qty">
-                        <button onClick={() => updateQuantity(index, item.quantity - 1)} aria-label="Decrease"><FaMinus size={9} /></button>
-                        <span>{item.quantity}</span>
-                        <button onClick={() => updateQuantity(index, item.quantity + 1)} aria-label="Increase"><FaPlus size={9} /></button>
+                {/* ---- Phone cards ---- */}
+                <div className="bl-cards">
+                  {filteredCart.map((item) => {
+                    const realIndex = cart.indexOf(item);
+                    const itemTotal =
+                      item.price * item.quantity - (item.discount || 0);
+                    return (
+                      <div className="bl-item" key={realIndex}>
+                        <div className="bl-item-top">
+                          <div className="bl-item-name">
+                            {item.isManual && (
+                              <span className="bl-tag">CUSTOM</span>
+                            )}
+                            {item.name}
+                          </div>
+                          <button
+                            className="bl-icon-btn danger"
+                            onClick={() => removeItem(realIndex)}
+                            aria-label="Remove item"
+                          >
+                            <FaTrash />
+                          </button>
+                        </div>
+
+                        <div className="bl-item-grid">
+                          <div>
+                            <label>Price</label>
+                            {item.isManual ? (
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                className="bl-input"
+                                value={item.price}
+                                min="0"
+                                onChange={(e) =>
+                                  updateItemPrice(realIndex, e.target.value)
+                                }
+                              />
+                            ) : (
+                              <div className="bl-item-price">
+                                ₹{item.price}
+                                {typeof item.stock === 'number' && (
+                                  <div className="bl-stock">
+                                    Stock: {item.stock}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <label>Discount %</label>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              className="bl-input"
+                              value={item.discountPercent || 0}
+                              min="0"
+                              max="100"
+                              onChange={(e) =>
+                                updateItemDiscountPercent(
+                                  realIndex,
+                                  e.target.value
+                                )
+                              }
+                            />
+                          </div>
+                        </div>
+
+                        <div className="bl-item-foot">
+                          <div className="bl-qty">
+                            <button
+                              onClick={() =>
+                                updateQuantity(realIndex, item.quantity - 1)
+                              }
+                              aria-label="Decrease"
+                            >
+                              <FaMinus size={11} />
+                            </button>
+                            <span>{item.quantity}</span>
+                            <button
+                              onClick={() =>
+                                updateQuantity(realIndex, item.quantity + 1)
+                              }
+                              aria-label="Increase"
+                            >
+                              <FaPlus size={11} />
+                            </button>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <span>Total </span>
+                            <b>₹{itemTotal.toFixed(0)}</b>
+                          </div>
+                        </div>
                       </div>
-
-                      <label className="bl-mini">
-                        ₹
-                        {item.isManual ? (
-                          <input
-                            className="bl-num"
-                            type="number"
-                            inputMode="decimal"
-                            value={item.price}
-                            onChange={(e) => updateItemPrice(index, e.target.value)}
-                            min="0"
-                          />
-                        ) : (
-                          <span className="bl-price-fixed">{item.price}</span>
-                        )}
-                      </label>
-
-                      <label className="bl-mini">
-                        Disc
-                        <input
-                          className="bl-num"
-                          type="number"
-                          inputMode="decimal"
-                          value={item.discount || 0}
-                          onChange={(e) => updateItemDiscount(index, e.target.value)}
-                          min="0"
-                        />
-                      </label>
-
-                      <div className="bl-item-total">₹{itemTotal.toFixed(0)}</div>
-                    </div>
-                  </div>
-                );
-              })
+                    );
+                  })}
+                </div>
+              </>
             )}
           </div>
         </div>
 
-        {/* ===== RIGHT ===== */}
-        <div className="bl-col">
-          {/* Customer Info */}
+        {/* ===================== RIGHT ===================== */}
+        <div>
+          {/* Customer */}
           <div className="bl-card">
-            <h3>
-              👤 Customer <span style={{ fontSize: '11px', color: '#999', fontWeight: 500 }}>(Optional)</span>
+            <h3 className="bl-card-title">
+              <FaUser /> Customer <small>(Optional)</small>
             </h3>
-            <div className="bl-two">
-              <input
-                className="bl-input"
-                type="text"
-                placeholder="Name"
-                autoComplete="off"
-                value={customer.name}
-                onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
-                style={inputStyle}
-              />
-              <input
-                className="bl-input"
-                type="tel"
-                inputMode="numeric"
-                placeholder="Phone"
-                autoComplete="off"
-                value={customer.phone}
-                onChange={(e) => setCustomer({ ...customer, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
-                maxLength={10}
-                style={inputStyle}
-              />
+            <div className="bl-stack">
+              <div className="bl-input-wrap">
+                <FaUser />
+                <input
+                  type="text"
+                  className="bl-input has-icon"
+                  placeholder="Customer name"
+                  value={customer.name}
+                  onChange={(e) =>
+                    setCustomer({ ...customer, name: e.target.value })
+                  }
+                />
+              </div>
+              <div className="bl-input-wrap">
+                <FaPhoneAlt />
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  className="bl-input has-icon"
+                  placeholder="Phone number"
+                  value={customer.phone}
+                  maxLength={10}
+                  onChange={(e) =>
+                    setCustomer({
+                      ...customer,
+                      phone: e.target.value.replace(/\D/g, '').slice(0, 10),
+                    })
+                  }
+                />
+              </div>
+              <div className="bl-input-wrap">
+                <FaRupeeSign />
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  className="bl-input has-icon orange"
+                  placeholder="Custom amount (for UPI QR)"
+                  value={customAmount}
+                  min="0"
+                  onChange={(e) => setCustomAmount(e.target.value)}
+                />
+              </div>
             </div>
-            <input
-              className="bl-input"
-              type="number"
-              inputMode="decimal"
-              placeholder="₹ Custom amount (for UPI QR)"
-              value={customAmount}
-              onChange={(e) => setCustomAmount(e.target.value)}
-              min="0"
-              style={{ ...inputStyle, marginTop: '8px', borderColor: '#f57c00', fontWeight: 700, color: '#f57c00' }}
-            />
-            {customAmount && Number(customAmount) > 0 && (
-              <p style={{ fontSize: '11px', color: '#f57c00', fontWeight: 600, margin: '6px 0 0' }}>
-                💡 QR will generate for ₹{customAmount}
-              </p>
-            )}
           </div>
 
           {/* Payment Method */}
           <div className="bl-card">
-            <h3>💳 Payment Method</h3>
-            <div className="bl-pay-grid">
+            <h3 className="bl-card-title">
+              <FaWallet /> Payment Method
+            </h3>
+            <div className="bl-pm-grid">
               {paymentMethods.map((pm) => (
                 <button
                   key={pm.key}
                   type="button"
+                  className={`bl-pm ${paymentMethod === pm.key ? 'active' : ''}`}
+                  style={{ '--pm': pm.color }}
                   onClick={() => {
                     setPaymentMethod(pm.key);
                     if (pm.key === 'UPI') setUpiConfirmed(false);
                   }}
-                  style={{
-                    padding: '10px 6px',
-                    border: `2px solid ${paymentMethod === pm.key ? pm.color : '#ddd'}`,
-                    background: paymentMethod === pm.key ? pm.color : '#fff',
-                    color: paymentMethod === pm.key ? '#fff' : '#666',
-                    borderRadius: '10px', fontWeight: 700, fontSize: '12px',
-                    cursor: 'pointer', display: 'flex', flexDirection: 'column',
-                    alignItems: 'center', gap: '4px',
-                  }}
                 >
-                  <span style={{ fontSize: '15px', display: 'flex' }}>{pm.icon}</span>
+                  {pm.icon}
                   {pm.label}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* UPI Section */}
+          {/* UPI */}
           {paymentMethod === 'UPI' && (
-            <div className="bl-card" style={{
-              background: upiConfirmed ? '#e8f5e9' : '#fff3e0',
-              border: `2px solid ${upiConfirmed ? '#2e7d32' : '#f57c00'}`,
-            }}>
+            <div className={`bl-upi ${upiConfirmed ? 'ok' : ''}`}>
               {upiConfirmed ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#2e7d32', fontWeight: 700, fontSize: '13px' }}>
+                <div className="bl-upi-ok">
                   <FaCheckCircle /> UPI Received ₹{qrAmount.toFixed(0)}
                   <button
+                    className="bl-link-btn"
                     onClick={() => setUpiConfirmed(false)}
-                    style={{ marginLeft: 'auto', background: 'transparent', border: 'none', color: '#2e7d32', cursor: 'pointer', fontSize: '12px', fontWeight: 700, textDecoration: 'underline', padding: '6px' }}
                   >
-                    Reset
+                    <FaUndo size={10} /> Reset
                   </button>
                 </div>
               ) : (
                 <>
-                  <p style={{ fontSize: '13px', color: '#f57c00', fontWeight: 700, margin: '0 0 4px' }}>
-                    📱 UPI QR se payment karwayein
-                  </p>
-                  <p style={{ fontSize: '11px', color: '#666', fontWeight: 500, margin: '0 0 10px' }}>
-                    Amount: ₹{qrAmount.toFixed(0)}{customAmount && Number(customAmount) > 0 && ' (custom)'}
+                  <p>
+                    <FaMobileAlt /> UPI QR se payment karwayein
                   </p>
                   <button
+                    className="bl-primary-btn"
                     onClick={() => {
-                      if (qrAmount <= 0) { setToast('⚠️ Enter amount to pay'); return; }
+                      if (qrAmount <= 0) {
+                        setToast('⚠️ Enter amount');
+                        return;
+                      }
                       setShowUpiModal(true);
-                    }}
-                    style={{
-                      width: '100%', background: '#1a237e', color: '#fff',
-                      border: 'none', padding: '12px', borderRadius: '8px',
-                      fontSize: '14px', fontWeight: 700, cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                     }}
                   >
                     <FaQrcode /> Generate UPI QR (₹{qrAmount.toFixed(0)})
@@ -688,67 +1094,80 @@ const Billing = () => {
             </div>
           )}
 
-          {/* Cash Section */}
+          {/* Cash */}
           {paymentMethod === 'Cash' && cart.length > 0 && (
-            <div className="bl-card" style={{ border: '2px solid #2e7d32' }}>
-              <h3 style={{ color: '#2e7d32' }}>💵 Cash Payment</h3>
-
+            <div className="bl-card bl-cash">
+              <h3 className="bl-card-title">
+                <FaMoneyBillWave /> Cash Payment
+              </h3>
               <input
-                className="bl-input"
                 type="number"
                 inputMode="decimal"
+                className="bl-cash-input"
                 placeholder={`Customer paid (Total: ₹${totalAmount.toFixed(0)})`}
                 value={paidAmount}
-                onChange={(e) => setPaidAmount(e.target.value)}
                 min="0"
-                style={{
-                  width: '100%', padding: '10px 14px', border: '2px solid #2e7d32',
-                  borderRadius: '8px', fontSize: '18px', fontWeight: 800,
-                  color: '#2e7d32', outline: 'none', textAlign: 'right',
-                  background: '#e8f5e9', boxSizing: 'border-box', marginBottom: '10px',
-                }}
+                onChange={(e) => setPaidAmount(e.target.value)}
               />
-
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
-                {[Math.ceil(totalAmount / 10) * 10, Math.ceil(totalAmount / 50) * 50, Math.ceil(totalAmount / 100) * 100]
-                  .filter((v, i, arr) => arr.indexOf(v) === i && v > 0).slice(0, 3)
+              <div className="bl-chips">
+                {[
+                  Math.ceil(totalAmount / 10) * 10,
+                  Math.ceil(totalAmount / 50) * 50,
+                  Math.ceil(totalAmount / 100) * 100,
+                ]
+                  .filter((v, i, arr) => arr.indexOf(v) === i && v > 0)
+                  .slice(0, 3)
                   .map((amount) => (
-                    <button key={amount} type="button" onClick={() => setPaidAmount(String(amount))}
-                      style={{ padding: '7px 12px', background: '#e8f5e9', color: '#2e7d32', border: '1.5px solid #2e7d32', borderRadius: '6px', fontWeight: 700, fontSize: '12px', cursor: 'pointer' }}>
+                    <button
+                      key={amount}
+                      type="button"
+                      className="bl-chip"
+                      onClick={() => setPaidAmount(String(amount))}
+                    >
                       ₹{amount}
                     </button>
                   ))}
-                <button type="button" onClick={() => setPaidAmount(String(Math.round(totalAmount)))}
-                  style={{ padding: '7px 12px', background: '#1a237e', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 700, fontSize: '12px', cursor: 'pointer' }}>
-                  Exact ₹{totalAmount.toFixed(0)}
+                <button
+                  type="button"
+                  className="bl-chip solid"
+                  onClick={() => setPaidAmount(String(Math.round(totalAmount)))}
+                >
+                  <FaCheckCircle size={11} /> Exact ₹{totalAmount.toFixed(0)}
                 </button>
-                <button type="button" onClick={() => setPaidAmount('')}
-                  style={{ padding: '7px 12px', background: '#f5f5f5', color: '#666', border: '1.5px solid #ddd', borderRadius: '6px', fontWeight: 700, fontSize: '12px', cursor: 'pointer' }}>
-                  Clear
+                <button
+                  type="button"
+                  className="bl-chip grey"
+                  onClick={() => setPaidAmount('')}
+                >
+                  <FaEraser size={11} /> Clear
                 </button>
               </div>
 
               {paidAmount !== '' && Number(paidAmount) > 0 && (
                 <>
                   {changeReturn > 0 ? (
-                    <div style={{ background: '#e8f5e9', padding: '10px 12px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: '4px solid #2e7d32' }}>
+                    <div className="bl-note green">
                       <div>
-                        <p style={{ fontSize: '11px', color: '#2e7d32', fontWeight: 700, textTransform: 'uppercase', margin: 0 }}>🔄 Return Change</p>
-                        <p style={{ fontSize: '11px', color: '#666', fontWeight: 500, margin: 0 }}>Customer ko wapas karein</p>
+                        <h4>
+                          <FaExchangeAlt /> Return Change
+                        </h4>
+                        <small>Customer ko wapas karein</small>
                       </div>
-                      <div style={{ fontSize: '24px', color: '#2e7d32', fontWeight: 800 }}>₹{changeReturn.toFixed(0)}</div>
+                      <div className="amt">₹{changeReturn.toFixed(0)}</div>
                     </div>
                   ) : dueAmount > 0 ? (
-                    <div style={{ background: '#ffebee', padding: '10px 12px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: '4px solid #c62828' }}>
+                    <div className="bl-note red">
                       <div>
-                        <p style={{ fontSize: '11px', color: '#c62828', fontWeight: 700, textTransform: 'uppercase', margin: 0 }}>⚠️ Still Due</p>
-                        <p style={{ fontSize: '11px', color: '#666', fontWeight: 500, margin: 0 }}>Customer se aur paise lein</p>
+                        <h4>
+                          <FaExclamationTriangle /> Still Due
+                        </h4>
+                        <small>Customer se aur paise lein</small>
                       </div>
-                      <div style={{ fontSize: '24px', color: '#c62828', fontWeight: 800 }}>₹{dueAmount.toFixed(0)}</div>
+                      <div className="amt">₹{dueAmount.toFixed(0)}</div>
                     </div>
                   ) : (
-                    <div style={{ background: '#e8f5e9', padding: '10px 12px', borderRadius: '10px', textAlign: 'center', borderLeft: '4px solid #2e7d32', color: '#2e7d32', fontWeight: 700, fontSize: '13px' }}>
-                      ✅ Exact Payment Received
+                    <div className="bl-exact">
+                      <FaCheckCircle /> Exact Payment Received
                     </div>
                   )}
                 </>
@@ -758,114 +1177,212 @@ const Billing = () => {
 
           {/* Bill Summary */}
           <div className="bl-card">
-            <h3>💰 Bill Summary</h3>
+            <h3 className="bl-card-title">
+              <FaTag /> Bill Summary
+            </h3>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', fontSize: '13px', fontWeight: 600 }}>
-              <span style={{ color: '#666' }}>Items ({totalItems})</span>
+            <div className="bl-row">
+              <span>Subtotal ({totalItems} items)</span>
               <span>₹{subtotal.toFixed(0)}</span>
             </div>
 
-            <div className="bl-two" style={{ marginBottom: '10px' }}>
-              <label style={labelStyle}>
-                Extra Discount (₹)
-                <input className="bl-input" type="number" inputMode="decimal" value={discountAmount} onChange={(e) => setDiscountAmount(e.target.value)} min="0" style={{ ...inputStyle, textAlign: 'right', fontWeight: 700 }} />
-              </label>
-              <label style={labelStyle}>
-                Tax (₹)
-                <input className="bl-input" type="number" inputMode="decimal" value={taxAmount} onChange={(e) => setTaxAmount(e.target.value)} min="0" style={{ ...inputStyle, textAlign: 'right', fontWeight: 700 }} />
-              </label>
+            {totalDiscount > 0 && (
+              <div className="bl-row bl-discount">
+                <span>
+                  <FaPercent size={11} /> Total Discount
+                </span>
+                <span>-₹{totalDiscount.toFixed(0)}</span>
+              </div>
+            )}
+
+            <div className="bl-row">
+              <span>Tax (₹)</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                className="bl-mini-input"
+                style={{ width: '90px' }}
+                value={taxAmount}
+                min="0"
+                onChange={(e) => setTaxAmount(e.target.value)}
+              />
             </div>
 
-            <input className="bl-input" type="text" placeholder="Notes (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} style={{ ...inputStyle, marginBottom: '12px' }} />
+            <div className="bl-input-wrap" style={{ marginTop: '4px' }}>
+              <FaStickyNote />
+              <input
+                type="text"
+                className="bl-input has-icon"
+                placeholder="Notes (optional)"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            </div>
 
-            <div style={{ borderTop: '2px solid #eee', paddingTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: '#1a237e', fontWeight: 800, fontSize: '14px' }}>TOTAL</span>
-              <span style={{ color: '#f57c00', fontWeight: 800, fontSize: '24px' }}>₹{totalAmount.toFixed(0)}</span>
+            <div className="bl-total">
+              <span>TOTAL</span>
+              <span>₹{totalAmount.toFixed(0)}</span>
             </div>
           </div>
 
-          {/* ===== BUTTONS (mobile par bottom bar me chipak jaate hain) ===== */}
-          <div className="bl-actions">
-            <div className="bl-bar-total">
-              <small>TOTAL</small>
-              <strong>₹{totalAmount.toFixed(0)}</strong>
-            </div>
-            <button
-              onClick={() => handleSave(false)}
-              disabled={saving}
-              style={{
-                background: saving ? '#9fa8da' : '#1a237e',
-                color: '#fff', border: 'none', padding: '14px', borderRadius: '10px',
-                fontSize: '15px', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-              }}
-            >
-              <FaSave />
-              {saving ? 'Saving...' : (<><span className="bl-lbl-lg">Save Bill</span><span className="bl-lbl-sm">Save</span></>)}
-            </button>
-            <button
-              onClick={() => handleSave(true)}
-              disabled={saving}
-              style={{
-                background: saving ? '#ffcc80' : '#f57c00',
-                color: '#fff', border: 'none', padding: '14px', borderRadius: '10px',
-                fontSize: '15px', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-              }}
-            >
-              <FaPrint />
-              {saving ? 'Saving...' : (<><span className="bl-lbl-lg">Save &amp; Print</span><span className="bl-lbl-sm">Print</span></>)}
-            </button>
-          </div>
+          {/* Desktop buttons */}
+          <div className="bl-desktop-actions">{renderActionButtons()}</div>
         </div>
       </div>
 
-      {/* Manual Item Modal */}
+      {/* ===== Sticky bottom bar (phones & tablets) ===== */}
+      {cart.length > 0 && (
+        <div className="bl-sticky">
+          <div className="bl-sticky-total">
+            <small>{totalItems} items • Total</small>
+            <b>₹{totalAmount.toFixed(0)}</b>
+          </div>
+          <div className="bl-sticky-btns">
+            <button
+              className="bl-btn blue"
+              onClick={() => handleSave(false)}
+              disabled={saving}
+            >
+              <FaSave /> {saving ? '...' : 'Save'}
+            </button>
+            <button
+              className="bl-btn orange"
+              onClick={() => handleSave(true)}
+              disabled={saving}
+            >
+              <FaPrint /> Print
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Manual Item Modal ===== */}
       {showManualModal && (
-        <div
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2500, padding: '16px' }}
-          onClick={() => setShowManualModal(false)}
-        >
-          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: '16px', width: '100%', maxWidth: '420px', maxHeight: '90vh', overflowY: 'auto', padding: '20px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', boxSizing: 'border-box' }}>
-            <h2 style={{ color: '#1a237e', fontWeight: 800, fontSize: '18px', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="bl-overlay" onClick={() => setShowManualModal(false)}>
+          <div className="bl-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>
               <FaBox style={{ color: '#f57c00' }} /> Add Custom Item
             </h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+
+            <div className="bl-stack" style={{ gap: '14px' }}>
               <div>
-                <label style={labelStyle}>Item Name *</label>
-                <input className="bl-input" type="text" placeholder="e.g., Notebook, Pen" value={manualItem.name}
-                  onChange={(e) => setManualItem({ ...manualItem, name: e.target.value })}
-                  autoFocus style={inputStyle} onKeyDown={(e) => e.key === 'Enter' && addManualItem()} />
+                <label className="bl-label">Item Name *</label>
+                <input
+                  type="text"
+                  className="bl-input"
+                  placeholder="e.g., Notebook, Pen"
+                  value={manualItem.name}
+                  autoFocus
+                  onChange={(e) =>
+                    setManualItem({ ...manualItem, name: e.target.value })
+                  }
+                />
               </div>
-              <div className="bl-two">
+
+              <div className="bl-modal-grid">
                 <div>
-                  <label style={labelStyle}>Price (₹) *</label>
-                  <input className="bl-input" type="number" inputMode="decimal" placeholder="0" value={manualItem.price}
-                    onChange={(e) => setManualItem({ ...manualItem, price: e.target.value })}
-                    min="0" style={inputStyle} onKeyDown={(e) => e.key === 'Enter' && addManualItem()} />
+                  <label className="bl-label">
+                    <FaRupeeSign size={10} /> Price *
+                  </label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    className="bl-input"
+                    placeholder="0"
+                    min="0"
+                    value={manualItem.price}
+                    onChange={(e) =>
+                      setManualItem({ ...manualItem, price: e.target.value })
+                    }
+                  />
                 </div>
                 <div>
-                  <label style={labelStyle}>Quantity</label>
-                  <input className="bl-input" type="number" inputMode="numeric" placeholder="1" value={manualItem.quantity}
-                    onChange={(e) => setManualItem({ ...manualItem, quantity: e.target.value })}
-                    min="1" style={inputStyle} />
+                  <label className="bl-label">Quantity</label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    className="bl-input"
+                    placeholder="1"
+                    min="1"
+                    value={manualItem.quantity}
+                    onChange={(e) =>
+                      setManualItem({ ...manualItem, quantity: e.target.value })
+                    }
+                  />
                 </div>
               </div>
+
+              <div>
+                <label className="bl-label">
+                  <FaPercent size={10} /> Discount %
+                </label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  className="bl-input"
+                  placeholder="0"
+                  min="0"
+                  max="100"
+                  value={manualItem.discountPercent}
+                  onChange={(e) =>
+                    setManualItem({
+                      ...manualItem,
+                      discountPercent: e.target.value,
+                    })
+                  }
+                />
+              </div>
+
+              <label className="bl-save-lib">
+                <input
+                  type="checkbox"
+                  checked={manualItem.saveToLibrary}
+                  onChange={(e) =>
+                    setManualItem({
+                      ...manualItem,
+                      saveToLibrary: e.target.checked,
+                    })
+                  }
+                />
+                <div>
+                  <p>
+                    <FaBookmark size={12} /> Save to Library (permanent)
+                  </p>
+                  <small>Next time search me bhi milega</small>
+                </div>
+              </label>
+
               {manualItem.price > 0 && (
-                <div style={{ background: '#fff8e1', padding: '10px 12px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: '4px solid #f57c00' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 700, color: '#666' }}>Subtotal:</span>
-                  <span style={{ fontSize: '18px', fontWeight: 800, color: '#f57c00' }}>
-                    ₹{(Number(manualItem.price) * Number(manualItem.quantity || 1)).toFixed(0)}
+                <div className="bl-preview">
+                  <span>Total:</span>
+                  <span>
+                    ₹
+                    {(
+                      Number(manualItem.price) *
+                      Number(manualItem.quantity || 1) *
+                      (1 - (Number(manualItem.discountPercent) || 0) / 100)
+                    ).toFixed(0)}
                   </span>
                 </div>
               )}
-              <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
-                <button onClick={() => { setShowManualModal(false); setManualItem({ name: '', price: '', quantity: 1 }); }}
-                  style={{ flex: 1, padding: '12px', background: '#f5f5f5', color: '#666', border: 'none', borderRadius: '8px', fontWeight: 700, fontSize: '14px', cursor: 'pointer' }}>
-                  Cancel
+
+              <div className="bl-modal-btns">
+                <button
+                  className="cancel"
+                  onClick={() => {
+                    setShowManualModal(false);
+                    setManualItem({
+                      name: '',
+                      price: '',
+                      quantity: 1,
+                      discountPercent: 0,
+                      saveToLibrary: false,
+                    });
+                  }}
+                >
+                  <FaTimes /> Cancel
                 </button>
-                <button onClick={addManualItem}
-                  style={{ flex: 2, padding: '12px', background: '#1a237e', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                <button className="add" onClick={addManualItem}>
                   <FaPlus /> Add to Cart
                 </button>
               </div>
@@ -887,27 +1404,6 @@ const Billing = () => {
       />
     </div>
   );
-};
-
-// ===== Styles =====
-const inputStyle = {
-  padding: '9px 12px',
-  border: '1.5px solid #ddd',
-  borderRadius: '8px',
-  fontSize: '14px',
-  fontWeight: 500,
-  outline: 'none',
-  fontFamily: 'inherit',
-  boxSizing: 'border-box',
-  width: '100%',
-};
-
-const labelStyle = {
-  display: 'block',
-  fontSize: '11px',
-  color: '#1a237e',
-  fontWeight: 700,
-  marginBottom: '5px',
 };
 
 export default Billing;
