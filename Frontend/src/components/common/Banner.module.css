@@ -349,7 +349,7 @@
 
   .bannerContainer {
     height: 380px;
-    border-radius: 12px;
+    border-radius: px;
   }
 
   .slideContent {
@@ -433,4 +433,11 @@
   .loaderSkeleton {
     height: 340px;
   }
+}
+@media (max-width: 768px) {
+  .bannerWrapper {
+    padding: 0px 0px 0;
+    
+  }
+
 }

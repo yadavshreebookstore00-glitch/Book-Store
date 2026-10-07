@@ -1,45 +1,60 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { FaMapMarkerAlt, FaCreditCard, FaMoneyBillWave } from 'react-icons/fa';
+import {
+  FaMapMarkerAlt,
+  FaCreditCard,
+  FaMoneyBillWave,
+  FaUser,
+  FaPhone,
+  FaHome,
+  FaCity,
+  FaLandmark,
+  FaMapPin,
+  FaGlobeAsia,
+  FaLock,
+  FaShieldAlt,
+  FaExclamationCircle,
+  FaSpinner,
+  FaArrowRight,
+  FaShoppingBag,
+  FaSignInAlt,
+  FaReceipt,
+  FaWallet,
+} from 'react-icons/fa';
 import api from '../services/api';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
+import styles from './Checkout.module.css';
 
-// Inline styles me media query nahi chalti, isliye responsive CSS yahan classes me hai
-const responsiveCss = `
-  .co-page { padding: 30px 20px; max-width: 1100px; margin: 0 auto; }
-  .co-title { color: #1a237e; font-weight: 800; margin-bottom: 25px; font-size: 26px; }
-  .co-layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr); gap: 25px; align-items: start; }
-  .co-card { background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
-  .co-card + .co-card { margin-top: 20px; }
-  .co-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .co-full { grid-column: span 2; }
-  .co-summary { position: sticky; top: 80px; height: fit-content; }
-  .co-input { min-width: 0; box-sizing: border-box; }
-  .co-input:focus { border-color: #1a237e !important; }
-  .co-pay-btn { min-height: 48px; }
-  .co-item-title { word-break: break-word; }
+// COD dobara chalu karna ho to true kar do
+const ENABLE_COD = false;
+const STORE_NAME = 'Apna Mens Wear';
 
-  /* Tablet & niche */
-  @media (max-width: 900px) {
-    .co-layout { grid-template-columns: minmax(0, 1fr); gap: 20px; }
-    .co-summary { position: static; }
-  }
+// ===== Input with icon =====
+const Field = ({ icon, full, ...props }) => (
+  <div className={`${styles.field} ${full ? styles.full : ''}`}>
+    <span className={styles.fieldIcon}>{icon}</span>
+    <input className={styles.input} {...props} />
+  </div>
+);
 
-  /* Mobile */
-  @media (max-width: 600px) {
-    .co-page { padding: 18px 12px 28px; }
-    .co-title { font-size: 21px; margin-bottom: 16px; }
-    .co-card { padding: 16px; border-radius: 10px; }
-    .co-card + .co-card { margin-top: 14px; }
-    .co-fields { grid-template-columns: minmax(0, 1fr); gap: 10px; }
-    .co-full { grid-column: auto; }
-    /* 16px se iOS input focus pe zoom nahi karta */
-    .co-input { font-size: 16px !important; padding: 12px 14px !important; }
-    .co-pay-btn { font-size: 16px !important; min-height: 50px; }
-    .co-radio { padding: 12px !important; }
-  }
-`;
+// ===== Payment option =====
+const PayOption = ({ value, active, onChange, icon, name, desc }) => (
+  <label className={`${styles.payOption} ${active ? styles.payActive : ''}`}>
+    <input
+      type="radio"
+      name="payment"
+      value={value}
+      checked={active}
+      onChange={onChange}
+    />
+    <span className={styles.payIcon}>{icon}</span>
+    <div>
+      <p className={styles.payName}>{name}</p>
+      <p className={styles.payDesc}>{desc}</p>
+    </div>
+  </label>
+);
 
 const Checkout = () => {
   const navigate = useNavigate();
@@ -83,19 +98,21 @@ const Checkout = () => {
 
   if (!user) {
     return (
-      <div style={{ padding: '80px 20px', textAlign: 'center' }}>
+      <div className={styles.centerBox}>
         <h2>Please login to checkout</h2>
-        <Link to="/login">Login</Link>
+        <Link to="/login" className={styles.centerBtn}>
+          <FaSignInAlt /> Login
+        </Link>
       </div>
     );
   }
 
   if (items.length === 0) {
     return (
-      <div style={{ padding: '80px 20px', textAlign: 'center' }}>
-        <h2 style={{ color: '#1a237e', marginBottom: '15px' }}>Nothing to Checkout</h2>
-        <Link to="/shop" style={{ background: '#1a237e', color: '#fff', padding: '12px 30px', borderRadius: '8px', textDecoration: 'none', fontWeight: 700, display: 'inline-block' }}>
-          Browse Books
+      <div className={styles.centerBox}>
+        <h2>Nothing to Checkout</h2>
+        <Link to="/shop" className={styles.centerBtn}>
+          <FaShoppingBag /> Browse Products
         </Link>
       </div>
     );
@@ -144,8 +161,8 @@ const Checkout = () => {
         key: orderData.key,
         amount: orderData.amount,
         currency: orderData.currency,
-        name: 'Yadav Shree Book Store',
-        description: `Order of ${items.length} book(s)`,
+        name: STORE_NAME,
+        description: `Order of ${items.length} item(s)`,
         order_id: orderData.orderId,
         handler: async (response) => {
           try {
@@ -223,109 +240,198 @@ const Checkout = () => {
     else handleCodOrder();
   };
 
-  return (
-    <div className="co-page">
-      <style>{responsiveCss}</style>
+  const isOnline = paymentMethod === 'Razorpay';
 
-      <h1 className="co-title">Checkout</h1>
+  return (
+    <div className={styles.page}>
+      <h1 className={styles.title}>
+        <FaLock /> Checkout
+      </h1>
 
       {error && (
-        <div style={{ background: '#ffebee', color: '#c62828', padding: '12px', borderRadius: '6px', marginBottom: '20px', fontWeight: 600, fontSize: '14px' }}>
-          ⚠️ {error}
+        <div className={styles.error}>
+          <FaExclamationCircle /> {error}
         </div>
       )}
 
       <form onSubmit={handleSubmit}>
-        <div className="co-layout">
-          {/* Left - Address + Payment */}
+        <div className={styles.layout}>
+          {/* ===== Left: Address + Payment ===== */}
           <div>
             {/* Shipping Address */}
-            <div className="co-card">
-              <h3 style={{ color: '#1a237e', fontWeight: 800, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className={styles.card}>
+              <h3 className={styles.cardTitle}>
                 <FaMapMarkerAlt /> Shipping Address
               </h3>
 
-              <div className="co-fields">
-                <input className="co-input" type="text" name="name" placeholder="Full Name *" autoComplete="name" value={form.name} onChange={handleChange} required style={inputStyle} />
-                <input className="co-input" type="tel" inputMode="numeric" name="phone" placeholder="Phone (10 digits) *" autoComplete="tel" value={form.phone} onChange={handleChange} required maxLength={10} style={inputStyle} />
-                <input className="co-input co-full" type="text" name="street" placeholder="Street / House No. *" autoComplete="street-address" value={form.street} onChange={handleChange} required style={inputStyle} />
-                <input className="co-input" type="text" name="city" placeholder="City *" autoComplete="address-level2" value={form.city} onChange={handleChange} required style={inputStyle} />
-                <input className="co-input" type="text" name="state" placeholder="State *" autoComplete="address-level1" value={form.state} onChange={handleChange} required style={inputStyle} />
-                <input className="co-input" type="text" inputMode="numeric" name="pincode" placeholder="Pincode (6 digits) *" autoComplete="postal-code" value={form.pincode} onChange={handleChange} required maxLength={6} style={inputStyle} />
-                <input className="co-input" type="text" name="country" placeholder="Country" value={form.country} onChange={handleChange} readOnly style={{ ...inputStyle, background: '#f5f5f5' }} />
+              <div className={styles.fields}>
+                <Field
+                  icon={<FaUser />}
+                  type="text"
+                  name="name"
+                  placeholder="Full Name *"
+                  autoComplete="name"
+                  value={form.name}
+                  onChange={handleChange}
+                  required
+                />
+                <Field
+                  icon={<FaPhone />}
+                  type="tel"
+                  inputMode="numeric"
+                  name="phone"
+                  placeholder="Phone (10 digits) *"
+                  autoComplete="tel"
+                  value={form.phone}
+                  onChange={handleChange}
+                  maxLength={10}
+                  required
+                />
+                <Field
+                  full
+                  icon={<FaHome />}
+                  type="text"
+                  name="street"
+                  placeholder="Street / House No. *"
+                  autoComplete="street-address"
+                  value={form.street}
+                  onChange={handleChange}
+                  required
+                />
+                <Field
+                  icon={<FaCity />}
+                  type="text"
+                  name="city"
+                  placeholder="City *"
+                  autoComplete="address-level2"
+                  value={form.city}
+                  onChange={handleChange}
+                  required
+                />
+                <Field
+                  icon={<FaLandmark />}
+                  type="text"
+                  name="state"
+                  placeholder="State *"
+                  autoComplete="address-level1"
+                  value={form.state}
+                  onChange={handleChange}
+                  required
+                />
+                <Field
+                  icon={<FaMapPin />}
+                  type="text"
+                  inputMode="numeric"
+                  name="pincode"
+                  placeholder="Pincode (6 digits) *"
+                  autoComplete="postal-code"
+                  value={form.pincode}
+                  onChange={handleChange}
+                  maxLength={6}
+                  required
+                />
+                <Field
+                  icon={<FaGlobeAsia />}
+                  type="text"
+                  name="country"
+                  placeholder="Country"
+                  value={form.country}
+                  readOnly
+                />
               </div>
             </div>
 
             {/* Payment Method */}
-            <div className="co-card">
-              <h3 style={{ color: '#1a237e', fontWeight: 800, marginBottom: '20px' }}>Payment Method</h3>
+            <div className={styles.card}>
+              <h3 className={styles.cardTitle}>
+                <FaWallet /> Payment Method
+              </h3>
 
-              <label className="co-radio" style={paymentOptionStyle(paymentMethod === 'Razorpay')}>
-                <input type="radio" name="payment" value="Razorpay" checked={paymentMethod === 'Razorpay'} onChange={(e) => setPaymentMethod(e.target.value)} />
-                <FaCreditCard style={{ color: '#1a237e', flexShrink: 0 }} />
-                <div>
-                  <div style={{ fontWeight: 700, color: '#1a237e' }}>Pay Online (Razorpay)</div>
-                  <div style={{ fontSize: '12px', color: '#666', fontWeight: 500 }}>Card, UPI, Netbanking, Wallets</div>
-                </div>
-              </label>
+              <PayOption
+                value="Razorpay"
+                active={isOnline}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                icon={<FaCreditCard />}
+                name="Pay Online (Razorpay)"
+                desc="Card, UPI, Netbanking, Wallets"
+              />
 
-             
+              {ENABLE_COD && (
+                <PayOption
+                  value="COD"
+                  active={!isOnline}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  icon={<FaMoneyBillWave />}
+                  name="Cash on Delivery"
+                  desc="Pay when your order arrives"
+                />
+              )}
             </div>
           </div>
 
-          {/* Right - Order Summary */}
-          <div className="co-summary">
-            <div className="co-card">
-              <h3 style={{ color: '#1a237e', fontWeight: 800, marginBottom: '20px' }}>Order Summary</h3>
+          {/* ===== Right: Order Summary ===== */}
+          <div className={styles.summary}>
+            <div className={styles.card}>
+              <h3 className={styles.cardTitle}>
+                <FaReceipt /> Order Summary
+              </h3>
 
-              {items.map((item, idx) => (
-                <div key={idx} style={{ display: 'flex', gap: '10px', marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid #f0f0f0' }}>
-                  <img src={item.image} alt={item.title} style={{ width: '40px', height: '55px', objectFit: 'cover', borderRadius: '5px', flexShrink: 0 }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p className="co-item-title" style={{ fontSize: '13px', fontWeight: 700, color: '#1a237e', marginBottom: '3px' }}>{item.title}</p>
-                    <p style={{ fontSize: '12px', color: '#666', fontWeight: 500 }}>Qty: {item.quantity} × ₹{item.price}</p>
+              <div className={styles.items}>
+                {items.map((item, idx) => (
+                  <div key={idx} className={styles.item}>
+                    <img src={item.image} alt={item.title} className={styles.itemImg} />
+                    <div className={styles.itemBody}>
+                      <p className={styles.itemTitle}>{item.title}</p>
+                      <p className={styles.itemMeta}>
+                        Qty: {item.quantity} × ₹{item.price}
+                      </p>
+                    </div>
+                    <span className={styles.itemTotal}>
+                      ₹{(item.price * item.quantity).toFixed(0)}
+                    </span>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '15px', marginBottom: '8px', fontSize: '14px', fontWeight: 600 }}>
-                <span style={{ color: '#666' }}>Subtotal</span>
+              <div className={styles.row}>
+                <span>Subtotal</span>
                 <span>₹{itemsPrice.toFixed(0)}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', fontSize: '14px', fontWeight: 600 }}>
-                <span style={{ color: '#666' }}>Shipping</span>
-                <span style={{ color: shippingPrice === 0 ? '#2e7d32' : '#333' }}>
+              <div className={styles.row}>
+                <span>Shipping</span>
+                <span className={shippingPrice === 0 ? styles.free : ''}>
                   {shippingPrice === 0 ? 'FREE' : `₹${shippingPrice}`}
                 </span>
               </div>
-              <div style={{ borderTop: '2px solid #eee', paddingTop: '15px', display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-                <span style={{ color: '#1a237e', fontWeight: 800 }}>Total</span>
-                <span style={{ color: '#f57c00', fontWeight: 800, fontSize: '20px' }}>₹{totalPrice.toFixed(0)}</span>
+
+              <div className={styles.totalRow}>
+                <span className={styles.totalLabel}>Total</span>
+                <span className={styles.totalValue}>₹{totalPrice.toFixed(0)}</span>
               </div>
 
               <button
                 type="submit"
                 disabled={loading}
-                className="co-pay-btn"
-                style={{
-                  width: '100%',
-                  background: loading ? '#999' : paymentMethod === 'Razorpay' ? '#1a237e' : '#2e7d32',
-                  color: '#fff',
-                  border: 'none',
-                  padding: '14px',
-                  borderRadius: '8px',
-                  fontSize: '15px',
-                  fontWeight: 700,
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  letterSpacing: '0.5px',
-                }}
+                className={`${styles.payBtn} ${isOnline ? '' : styles.cod}`}
               >
-                {loading
-                  ? '⏳ Processing...'
-                  : paymentMethod === 'Razorpay'
-                  ? `Pay ₹${totalPrice.toFixed(0)}`
-                  : 'Place COD Order →'}
+                {loading ? (
+                  <>
+                    <FaSpinner className={styles.spin} /> Processing...
+                  </>
+                ) : isOnline ? (
+                  <>
+                    <FaLock /> Pay ₹{totalPrice.toFixed(0)}
+                  </>
+                ) : (
+                  <>
+                    Place COD Order <FaArrowRight />
+                  </>
+                )}
               </button>
+
+              <p className={styles.secure}>
+                <FaShieldAlt /> 100% secure payments
+              </p>
             </div>
           </div>
         </div>
@@ -333,29 +439,5 @@ const Checkout = () => {
     </div>
   );
 };
-
-const inputStyle = {
-  padding: '11px 14px',
-  border: '1.5px solid #ddd',
-  borderRadius: '8px',
-  fontSize: '14px',
-  fontWeight: 500,
-  outline: 'none',
-  fontFamily: 'inherit',
-  width: '100%',
-};
-
-const paymentOptionStyle = (active) => ({
-  display: 'flex',
-  alignItems: 'center',
-  gap: '12px',
-  padding: '15px',
-  border: `2px solid ${active ? '#1a237e' : '#ddd'}`,
-  borderRadius: '10px',
-  cursor: 'pointer',
-  marginBottom: '12px',
-  background: active ? '#e8eaf6' : '#fff',
-  transition: 'all 0.2s',
-});
 
 export default Checkout;

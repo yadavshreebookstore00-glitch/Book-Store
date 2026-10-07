@@ -1,0 +1,466 @@
+
+
+/* ================= SECTION ================= */
+.homeSection {
+  padding: 40px 20px 30px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+  
+}
+
+/* ================= ERROR BOX ================= */
+.errorBox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #ffebee;
+  color: #c62828;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-weight: 600;
+  font-size: 13px;
+  border-left: 4px solid #c62828;
+}
+
+.errorIcon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+/* ================= SECTION HEADER ================= */
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #1a237e;
+  font-weight: 800;
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: -0.3px;
+}
+
+.sectionIcon {
+  color: #f57c00;
+  font-size: 20px;
+}
+
+.viewAllLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+  text-decoration: none;
+  padding-bottom: 2px;
+  transition: all 0.2s ease;
+  background-color: #f57c00;
+  padding: 5px 10px;
+  border-radius: 20px;
+}
+
+.viewAllLink:hover {
+  color: #1a237e;
+  border-color: #1a237e;
+}
+
+.viewAllIcon {
+  font-size: 11px;
+}
+
+/* ================= EMPTY STATE ================= */
+.emptyState {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.emptyEmoji {
+  font-size: 60px;
+  color: #ddd;
+  margin-bottom: 15px;
+}
+
+.emptyTitle {
+  color: #1a237e;
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+}
+
+.emptyText {
+  color: #666;
+  font-size: 14px;
+  font-weight: 500;
+  margin: 0;
+}
+
+/* ================= GRID ================= */
+.booksGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 20px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.bookCardLink {
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  height: 100%;
+  width: 100%;
+  min-width: 0;
+}
+
+.bookCard {
+  background: #fffeff;
+  border-radius: 2px;
+  overflow: hidden;
+  border: 1px solid #f0f0f0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  position: relative;
+}
+
+.bookCard:hover,
+.bookCardHovered {
+  box-shadow: 0 12px 24px rgba(26, 35, 126, 0.12);
+  transform: translateY(-6px);
+}
+
+/* ================= IMAGE ================= */
+.bookImageWrapper {
+  position: relative;
+  width: 100%;
+  height: 260px;
+  overflow: hidden;
+  background: #f5f5f5;
+  flex-shrink: 0;
+}
+
+.bookImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.bookImageHovered {
+  transform: scale(1.08);
+}
+
+.bookShadow {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.75) 0%,
+    rgba(0, 0, 0, 0.35) 50%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+.bookDiscount {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: #f57c00;
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  z-index: 2;
+  box-shadow: 0 2px 8px rgba(245, 124, 0, 0.4);
+}
+
+.bookWishlist {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.95);
+  border: none;
+  color: #666;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all 0.25s ease;
+  z-index: 2;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.bookWishlist:hover {
+  background: #ffebee;
+  color: #c62828;
+  transform: scale(1.1);
+}
+
+.bookWishlistActive {
+  background: #c62828;
+  color: #fff;
+}
+
+.bookOutOfStock {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+}
+
+.bookOutOfStock span {
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 8px 16px;
+  border: 2px solid #fff;
+  border-radius: 6px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+/* ================= CONTENT ================= */
+.bookContent {
+  padding: 10px 12px 14px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 3px;
+  min-height: 0;
+  min-width: 0;
+}
+
+.bookTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a237e;
+  margin: 0;
+  line-height: 18px;
+  height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookAuthor {
+  font-size: 11.5px;
+  color: #666;
+  font-weight: 500;
+  margin: 0;
+  line-height: 14px;
+  height: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookPriceRating {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 6px;
+  min-height: 22px;
+  overflow: hidden;
+}
+
+.bookPriceLeft {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.bookPrice {
+  font-size: 16px;
+  font-weight: 800;
+  color: #f57c00;
+  letter-spacing: -0.3px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.bookOriginalPrice {
+  font-size: 11.5px;
+  color: #999;
+  text-decoration: line-through;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.bookRatingRight {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.bookRatingStar {
+  color: #f57c00;
+  font-size: 10.5px;
+}
+
+.bookRatingValue {
+  font-weight: 700;
+  color: #1a237e;
+  font-size: 11.5px;
+  line-height: 1;
+}
+
+.bookRatingCount {
+  color: #999;
+  font-weight: 500;
+  font-size: 10.5px;
+  line-height: 1;
+}
+
+/* ==========================================================
+   RESPONSIVE
+   ========================================================== */
+
+@media (max-width: 1024px) {
+  .booksGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .bookImageWrapper {
+    height: 240px;
+  }
+}
+
+@media (max-width: 768px) {
+  .booksGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .bookImageWrapper {
+    height: 200px;
+  }
+  .bookTitle {
+    font-size: 13.5px;
+    line-height: 17px;
+    height: 17px;
+  }
+  .bookPrice {
+    font-size: 15px;
+  }
+}
+
+@media (max-width: 480px) {
+  .homeSection {
+    padding: 20px 10px 20px;
+  }
+  .sectionTitle {
+    font-size: 18px;
+    gap: 8px;
+  }
+  .sectionIcon {
+    font-size: 17px;
+  }
+  .booksGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .bookImageWrapper {
+    height: 160px;
+  }
+  .bookContent {
+    padding: 8px 8px 12px;
+    gap: 2px;
+  }
+  .bookTitle {
+    font-size: 12.5px;
+    line-height: 15px;
+    height: 15px;
+  }
+  .bookAuthor {
+    font-size: 10.5px;
+    line-height: 13px;
+    height: 13px;
+  }
+  .bookPrice {
+    font-size: 14px;
+  }
+  .bookOriginalPrice {
+    font-size: 10px;
+  }
+  .bookRatingValue {
+    font-size: 10.5px;
+  }
+  .bookRatingCount {
+    font-size: 9.5px;
+  }
+  .bookRatingStar {
+    font-size: 9.5px;
+  }
+  .bookDiscount {
+    font-size: 9.5px;
+    padding: 3px 7px;
+    top: 6px;
+    left: 6px;
+  }
+  .bookWishlist {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+    top: 6px;
+    right: 6px;
+  }
+  .emptyEmoji {
+    font-size: 50px;
+  }
+}
+
+@media (max-width: 360px) {
+  .homeSection {
+    padding: 15px 8px 15px;
+  }
+  .booksGrid {
+    gap: 6px;
+  }
+  .bookImageWrapper {
+    height: 140px;
+  }
+  .bookTitle {
+    font-size: 12px;
+    line-height: 14px;
+    height: 14px;
+  }
+  .bookPrice {
+    font-size: 13px;
+  }
+}

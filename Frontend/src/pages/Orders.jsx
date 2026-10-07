@@ -1,8 +1,163 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import {
+  FaBoxOpen,
+  FaCalendarAlt,
+  FaHashtag,
+  FaCheckCircle,
+  FaClock,
+  FaCog,
+  FaTruck,
+  FaTimesCircle,
+  FaSpinner,
+  FaShoppingBag,
+  FaCreditCard,
+  FaMoneyBillWave,
+  FaChevronDown,
+  FaClipboardList,
+  FaCheck,
+  FaBan,
+} from 'react-icons/fa';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import styles from './Orders.module.css';
 
+const STATUS_ICONS = {
+  Pending: <FaClock />,
+  Processing: <FaCog />,
+  Shipped: <FaTruck />,
+  Delivered: <FaCheckCircle />,
+  Cancelled: <FaTimesCircle />,
+};
+
+// Progress tracker ke steps
+const STEPS = ['Pending', 'Processing', 'Shipped', 'Delivered'];
+
+const VISIBLE_ITEMS = 2;
+
+// ===== Progress tracker =====
+const Tracker = ({ status }) => {
+  if (status === 'Cancelled') {
+    return (
+      <div className={styles.cancelBar}>
+        <FaBan /> This order was cancelled
+      </div>
+    );
+  }
+
+  const current = Math.max(STEPS.indexOf(status), 0);
+
+  return (
+    <div className={styles.track}>
+      {STEPS.map((step, i) => (
+        <div
+          key={step}
+          className={`${styles.step} ${i <= current ? styles.stepDone : ''} ${
+            i === current ? styles.stepCurrent : ''
+          }`}
+        >
+          <span className={styles.dot}>
+            {i <= current ? <FaCheck /> : i + 1}
+          </span>
+          {step}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ===== Single order card =====
+const OrderCard = ({ order }) => {
+  const [expanded, setExpanded] = useState(false);
+
+  const items = order.orderItems || [];
+  const shown = expanded ? items : items.slice(0, VISIBLE_ITEMS);
+  const hidden = items.length - VISIBLE_ITEMS;
+  const isCod = order.paymentMethod === 'COD';
+
+  return (
+    <div className={styles.card}>
+      {/* Header */}
+      <div className={styles.cardHead}>
+        <div className={styles.meta}>
+          <span className={styles.orderId}>
+            <FaHashtag /> {order._id.slice(-8).toUpperCase()}
+          </span>
+          <span>
+            <FaCalendarAlt />
+            {new Date(order.createdAt).toLocaleDateString('en-IN', {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+            })}
+          </span>
+        </div>
+
+        <div className={styles.badges}>
+          <span className={`${styles.badge} ${styles[order.status] || ''}`}>
+            {STATUS_ICONS[order.status]} {order.status}
+          </span>
+          <span
+            className={`${styles.badge} ${order.isPaid ? styles.paid : styles.unpaid}`}
+          >
+            {order.isPaid ? <FaCheckCircle /> : <FaClock />}
+            {order.isPaid ? 'Paid' : 'Payment Pending'}
+          </span>
+        </div>
+      </div>
+
+      {/* Progress */}
+      <Tracker status={order.status} />
+
+      {/* Items */}
+      <div className={styles.items}>
+        {shown.map((item, i) => (
+          <div key={i} className={styles.item}>
+            <img src={item.image} alt={item.title} className={styles.itemImg} />
+            <div className={styles.itemBody}>
+              <p className={styles.itemTitle}>{item.title}</p>
+              <p className={styles.itemMeta}>
+                Qty: {item.quantity} × ₹{item.price}
+              </p>
+            </div>
+            <span className={styles.itemPrice}>
+              ₹{(item.price * item.quantity).toLocaleString('en-IN')}
+            </span>
+          </div>
+        ))}
+
+        {hidden > 0 && (
+          <button
+            type="button"
+            className={styles.toggle}
+            onClick={() => setExpanded((v) => !v)}
+          >
+            {expanded ? 'Show less' : `+${hidden} more item${hidden > 1 ? 's' : ''}`}
+            <FaChevronDown
+              className={`${styles.chevron} ${expanded ? styles.chevronOpen : ''}`}
+            />
+          </button>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className={styles.cardFoot}>
+        <span className={styles.payMethod}>
+          {isCod ? <FaMoneyBillWave /> : <FaCreditCard />}
+          {isCod ? 'Cash on Delivery' : order.paymentMethod}
+        </span>
+        <div className={styles.totalWrap}>
+          <span className={styles.totalLabel}>Total</span>
+          <span className={styles.total}>
+            ₹{Number(order.totalPrice).toLocaleString('en-IN')}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ===== Orders page =====
 const Orders = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -18,7 +173,7 @@ const Orders = () => {
     const fetchOrders = async () => {
       try {
         const { data } = await api.get('/orders/myorders');
-        setOrders(data);
+        setOrders(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error(err);
       } finally {
@@ -28,85 +183,37 @@ const Orders = () => {
     fetchOrders();
   }, [user, navigate]);
 
-  if (loading) return <div style={{ padding: '80px', textAlign: 'center' }}>Loading orders...</div>;
+  if (loading) {
+    return (
+      <div className={styles.centerBox}>
+        <FaSpinner className={styles.spin} />
+        <p>Loading your orders...</p>
+      </div>
+    );
+  }
 
   if (orders.length === 0) {
     return (
-      <div style={{ padding: '80px 20px', textAlign: 'center' }}>
-        <h2 style={{ color: '#1a237e', marginBottom: '15px' }}>No Orders Yet</h2>
-        <Link to="/shop" style={{ background: '#1a237e', color: '#fff', padding: '12px 30px', borderRadius: '8px', textDecoration: 'none', fontWeight: 700 }}>
-          Start Shopping
+      <div className={styles.centerBox}>
+        <FaBoxOpen className={styles.centerIcon} />
+        <h2>No Orders Yet</h2>
+        <p>Looks like you haven't placed any order.</p>
+        <Link to="/shop" className={styles.centerBtn}>
+          <FaShoppingBag /> Start Shopping
         </Link>
       </div>
     );
   }
 
-  const statusColors = {
-    Pending: '#f57c00',
-    Processing: '#1976d2',
-    Shipped: '#6a1b9a',
-    Delivered: '#2e7d32',
-    Cancelled: '#c62828',
-  };
-
   return (
-    <div style={{ padding: '30px 20px', maxWidth: '1000px', margin: '0 auto' }}>
-      <h1 style={{ color: '#1a237e', fontWeight: 800, marginBottom: '25px', fontSize: '26px' }}>
-        My Orders ({orders.length})
+    <div className={styles.page}>
+      <h1 className={styles.title}>
+        <FaClipboardList /> My Orders
+        <span className={styles.count}>{orders.length}</span>
       </h1>
 
       {orders.map((order) => (
-        <div
-          key={order._id}
-          style={{
-            background: '#fff',
-            padding: '20px',
-            borderRadius: '12px',
-            boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
-            marginBottom: '15px',
-          }}
-        >
-          {/* Header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
-            <div>
-              <p style={{ fontSize: '12px', color: '#666', fontWeight: 600, marginBottom: '3px' }}>Order ID</p>
-              <p style={{ fontSize: '13px', fontWeight: 700, color: '#1a237e' }}>#{order._id.slice(-8).toUpperCase()}</p>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <p style={{ fontSize: '12px', color: '#666', fontWeight: 600, marginBottom: '3px' }}>Placed on</p>
-              <p style={{ fontSize: '13px', fontWeight: 700 }}>{new Date(order.createdAt).toLocaleDateString('en-IN')}</p>
-            </div>
-          </div>
-
-          {/* Status */}
-          <div style={{ display: 'flex', gap: '10px', marginBottom: '15px', flexWrap: 'wrap' }}>
-            <span style={{ background: `${statusColors[order.status]}15`, color: statusColors[order.status], padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: 700 }}>
-              {order.status}
-            </span>
-            <span style={{ background: order.isPaid ? '#e8f5e9' : '#fff3e0', color: order.isPaid ? '#2e7d32' : '#f57c00', padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: 700 }}>
-              {order.isPaid ? '✓ Paid' : '○ Pending'} • {order.paymentMethod}
-            </span>
-          </div>
-
-          {/* Items */}
-          <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '15px', marginBottom: '15px' }}>
-            {order.orderItems.map((item, i) => (
-              <div key={i} style={{ display: 'flex', gap: '12px', marginBottom: '10px', alignItems: 'center' }}>
-                <img src={item.image} alt={item.title} style={{ width: '45px', height: '60px', objectFit: 'cover', borderRadius: '5px' }} />
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: '14px', fontWeight: 700, color: '#1a237e' }}>{item.title}</p>
-                  <p style={{ fontSize: '12px', color: '#666', fontWeight: 500 }}>Qty: {item.quantity} × ₹{item.price}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Total */}
-          <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ color: '#666', fontWeight: 700, fontSize: '13px' }}>Total</span>
-            <span style={{ color: '#f57c00', fontWeight: 800, fontSize: '20px' }}>₹{order.totalPrice}</span>
-          </div>
-        </div>
+        <OrderCard key={order._id} order={order} />
       ))}
     </div>
   );
