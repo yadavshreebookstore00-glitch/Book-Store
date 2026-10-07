@@ -32,7 +32,7 @@ const Navbar = () => {
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
 
-  // ✅ Animated Placeholder State
+  // Animated Placeholder State
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [previousWordIndex, setPreviousWordIndex] = useState(null);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -41,7 +41,6 @@ const Navbar = () => {
   const inputRef = useRef(null);
   const mobileSearchRef = useRef(null);
   const mobileInputRef = useRef(null);
-  const animationTimerRef = useRef(null);
   const navigate = useNavigate();
 
   const { user } = useAuth();
@@ -50,7 +49,7 @@ const Navbar = () => {
 
   const debouncedSearch = useDebounce(searchTerm, 300);
 
-  // ✅ Dynamic Placeholder Words
+  // Dynamic Placeholder Words
   const placeholderWords = [
     'books',
     'authors',
@@ -60,32 +59,59 @@ const Navbar = () => {
     'genres',
   ];
 
-  const ANIMATION_DURATION = 600; // ✅ Animation duration (ms)
-  const ROTATION_INTERVAL = 3000; // ✅ Word change interval
+  const ANIMATION_DURATION = 600;
+  const ROTATION_INTERVAL = 3000;
 
   // ============================================================
-  // ✅ Smooth Placeholder Rotation
+  // ✅ Get user initial + color
+  // ============================================================
+  const getUserInitial = () => {
+    if (!user?.name) return '?';
+    return user.name.charAt(0).toUpperCase();
+  };
+
+  // ✅ Generate consistent color from name
+  const getUserColor = () => {
+    if (!user?.name) return '#1a237e';
+
+    const colors = [
+      '#1a237e', // Navy
+      '#f57c00', // Orange
+      '#2e7d32', // Green
+      '#c62828', // Red
+      '#6a1b9a', // Purple
+      '#0277bd', // Blue
+      '#00838f', // Teal
+      '#ef6c00', // Amber
+    ];
+
+    // Hash name to get consistent color
+    let hash = 0;
+    for (let i = 0; i < user.name.length; i++) {
+      hash = user.name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+  };
+
+  // ============================================================
+  // Smooth Placeholder Rotation
   // ============================================================
   useEffect(() => {
     const interval = setInterval(() => {
-      // Step 1: Mark previous word for slide-out animation
       setIsAnimating(true);
       setPreviousWordIndex(currentWordIndex);
 
-      // Step 2: Change word after a brief delay
       const changeTimer = setTimeout(() => {
         setCurrentWordIndex(
           (prev) => (prev + 1) % placeholderWords.length
         );
       }, 50);
 
-      // Step 3: Clear previous word AFTER animation completes
       const clearTimer = setTimeout(() => {
         setPreviousWordIndex(null);
         setIsAnimating(false);
       }, ANIMATION_DURATION);
 
-      // Cleanup timers
       return () => {
         clearTimeout(changeTimer);
         clearTimeout(clearTimer);
@@ -217,9 +243,8 @@ const Navbar = () => {
     }
   };
 
-  // ✅ Animated Placeholder Component
+  // Animated Placeholder Component
   const AnimatedPlaceholder = () => {
-    // Hide if user has typed something
     if (searchTerm) return null;
 
     return (
@@ -227,7 +252,6 @@ const Navbar = () => {
         <span className={styles.placeholderPrefix}>Search</span>
 
         <div className={styles.placeholderSlider}>
-          {/* Previous word — slides out to bottom */}
           {previousWordIndex !== null && (
             <span
               key={`prev-${previousWordIndex}`}
@@ -237,7 +261,6 @@ const Navbar = () => {
             </span>
           )}
 
-          {/* Current word — slides in from top */}
           <span
             key={`curr-${currentWordIndex}`}
             className={`${styles.placeholderWord} ${
@@ -404,15 +427,26 @@ const Navbar = () => {
                   )}
                 </span>
               </Link>
+
+              {/* ✅ User Avatar / Icon */}
               <Link
                 to={user ? '/profile' : '/login'}
                 className={styles.iconLink}
                 onClick={closeMenu}
-                title={user ? 'Profile' : 'Login'}
+                title={user ? user.name : 'Login'}
               >
-                <span className={styles.iconCircle}>
-                  <FaUser />
-                </span>
+                {user ? (
+                  <span
+                    className={styles.userAvatar}
+                    style={{ background: getUserColor() }}
+                  >
+                    {getUserInitial()}
+                  </span>
+                ) : (
+                  <span className={styles.iconCircle}>
+                    <FaUser />
+                  </span>
+                )}
               </Link>
             </div>
           </div>
@@ -537,8 +571,9 @@ const Navbar = () => {
           <span>Wishlist</span>
         </NavLink>
 
+        {/* ✅ Profile / Login in Bottom Nav */}
         <NavLink
-          to="/cart"
+          to={user ? '/profile' : '/login'}
           className={({ isActive }) =>
             isActive
               ? `${styles.bottomItem} ${styles.bottomActive}`
@@ -546,12 +581,18 @@ const Navbar = () => {
           }
         >
           <span className={styles.bottomIconWrap}>
-            <FaTag className={styles.bottomIcon} />
-            {user && cartCount > 0 && (
-              <span className={styles.bottomBadge}>{cartCount}</span>
+            {user ? (
+              <span
+                className={styles.bottomUserAvatar}
+                style={{ background: getUserColor() }}
+              >
+                {getUserInitial()}
+              </span>
+            ) : (
+              <FaUser className={styles.bottomIcon} />
             )}
           </span>
-          <span>Cart</span>
+          <span>{user ? user.name.split(' ')[0] : 'Login'}</span>
         </NavLink>
       </nav>
     </>

@@ -634,3 +634,37 @@
     padding-bottom: 92px;
   }
 }
+/* User avatar circle with first letter */
+.userAvatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  user-select: none;
+  /* background inline style se aata hai getUserColor() se */
+}
+
+.userAvatar::first-letter {
+  font-size: 17px;
+  font-weight: 800;
+}
+.bottomUserAvatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  user-select: none;
+}
